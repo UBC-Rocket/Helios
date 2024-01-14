@@ -26,6 +26,7 @@ jobs:
           for file in ${{ steps.changed-files.outputs.all_modified_files }}; do
             if [[ -f $file && $file == *.py ]]; then
               echo $file
-              pylint --errors-only --disable=all $file
+              pylint $file
+              # pylint --errors-only --disable=all $file
             fi
           done
