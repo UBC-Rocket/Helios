@@ -1,0 +1,9 @@
+repos:
+- repo: local
+  hooks:
+    - id: pylint
+      name: pylint
+      entry: pylint
+      language: system
+      types: [python]
+      args: ["--disable=all", "--enable=F,unreachable,duplicate-key,useless-suppression", "--msg-template='{path}:{line}:{column}: {msg_id}: {msg}'", "--reports=n"]
