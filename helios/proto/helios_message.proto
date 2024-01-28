@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+// Wrapper for multiple types of messages
+message HeliosMessage {
+  oneof message_type {
+    EventMessage event_message = 1;
+    // StatusMessage status_message = 2;
+  }
+}
+
+message EventMessage {
+  uint32 message_id = 1;
+  bytes payload = 2;
+}
