@@ -1,0 +1,5 @@
+{
+    "python.languageServer": "Pylance",
+    "files.trimFinalNewlines": true,
+    "files.trimTrailingWhitespace": true
+}
