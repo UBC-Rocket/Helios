@@ -10,6 +10,17 @@ def generate_component_path(component: Union[ComponentGroup, ComponentManager]) 
     return (*generate_component_path(component.parent), component.name) if component.parent else (component.name,)
 
 
+class BaseComponent(ABC):
+    def __init__(self):
+        pass
+
+    def get_path(self) -> tuple[str, ...]:
+        raise NotImplementedError()
+
+    def print_tree(self, last=True, header=''):
+        raise NotImplementedError()
+
+
 class ComponentGroup():
     def __init__(self, name: str, parent: Optional[ComponentGroup] = None):
         self.name: str = name
@@ -33,9 +44,13 @@ class ComponentGroup():
 
         elif isinstance(component, AbstractComponent):
             self.components[name] = ComponentManager(name, component, parent=self)
+            component.path = self.components[name].get_path()
 
         else:
             raise TypeError(f"Unsupported component type: {type(component).__name__}")
+
+    def get_path(self) -> tuple[str, ...]:
+        return (*self.parent.get_path(), self.name) if self.parent else (self.name,)
 
     def print_tree(self, last=True, header=''):
         children = list(self.components.values())
@@ -57,6 +72,9 @@ class ComponentManager():
         self.transport: Optional[AbstractTransport] = None
         self.parent: Optional[ComponentGroup] = parent
 
+    def get_path(self) -> tuple[str, ...]:
+        return (*self.parent.get_path(), self.name) if self.parent else (self.name,)
+
     def print_tree(self, last=True, header=''):
         elbow = "└──"
         pipe = "│  "
@@ -66,7 +84,7 @@ class ComponentManager():
         self.component_object.print_tree(header=header + (blank if last else pipe))
 
 
-class AbstractComponent(ABC):
+class AbstractComponent(BaseComponent, ABC):
     def __init__(self, *args, **kwargs):
         self.initialized: bool = False
         self.launch_args: tuple[Any, ...] = args
@@ -80,6 +98,9 @@ class AbstractComponent(ABC):
 
     def run(self):
         raise NotImplementedError()
+
+    def get_path(self) -> tuple[str, ...]:
+        return self.path
 
     def print_tree(self, last=True, header=''):
         elbow = "└──"

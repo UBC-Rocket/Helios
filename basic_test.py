@@ -20,7 +20,7 @@ def main():
 
     rocket.add_component("test_producer", event_producer := TestEventProducer())
     rocket.add_component("test_consumer", TestEventConsumer())
-    rocket.add_component("test_subscriber", TestEventSubscriber(source=event_producer))
+    rocket.add_component("test_subscriber", TestEventSubscriber(source=event_producer.get_path()))
 
     group = rocket.create_component_group("test_group")
     group.add_component("test_producer_two", TestEventProducer(timeout=10))

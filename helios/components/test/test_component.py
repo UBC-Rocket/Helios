@@ -18,7 +18,7 @@ class TestEventConsumer(AbstractComponent):
 
 
 class TestEventSubscriber(AbstractComponent):
-    def __init__(self, source: TestEventProducer):
+    def __init__(self, source: tuple[str, ...]):
         super().__init__(source)
 
     def run(self, source: tuple[str, ...]):

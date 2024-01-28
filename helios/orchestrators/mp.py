@@ -1,5 +1,5 @@
 from helios.orchestrators.orchestrator import AbstractOrchestrator
-from helios.components.component import ComponentManager, generate_component_path
+from helios.components.component import ComponentManager
 from helios.transports.transport import AbstractTransport
 from helios.transports.pipe import PipeTransport
 
@@ -28,10 +28,14 @@ class MultiprocessingOrchestrator(AbstractOrchestrator):
             raise TypeError(f"Unsupported transport type: {self.transport.__name__}")
 
         # Initialize the component
-        component.component_object.initComponent(component.name, generate_component_path(component), child_transport)
+        component.component_object.initComponent(component.name, component.get_path(), child_transport)
 
         # Create the component
-        component.reference = Process(target=component.component_object.run, args=())
+        component.reference = Process(
+            target=component.component_object.run,
+            args=component.component_object.launch_args,
+            kwargs=component.component_object.launch_kwargs
+        )
 
         # Set the manager transport
         component.transport = parent_transport
