@@ -1,13 +1,12 @@
 from helios.components.component import ComponentGroup, ComponentManager
-from helios.transports.transport import AbstractTransport
 
-from typing import Union, Type
+from typing import Union
 from abc import ABC
 
 
 class AbstractOrchestrator(ABC):
-    def __init__(self, transport: Type[AbstractTransport]):
-        self.transport: Type[AbstractTransport] = transport
+    def __init__(self):
+        pass
 
     def start_all(self, component_tree: ComponentGroup):
         def _start_all(comp: Union[ComponentGroup, ComponentManager]):

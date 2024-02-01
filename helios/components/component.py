@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from helios.transports.transport import AbstractTransport
-
 from abc import ABC
 from typing import Union, Optional, Any
 
@@ -69,7 +67,6 @@ class ComponentManager():
         self.name: str = name
         self.component_object: AbstractComponent = component_object
         self.reference: Any = None
-        self.transport: Optional[AbstractTransport] = None
         self.parent: Optional[ComponentGroup] = parent
 
     def get_path(self) -> tuple[str, ...]:
@@ -90,10 +87,9 @@ class AbstractComponent(BaseComponent, ABC):
         self.launch_args: tuple[Any, ...] = args
         self.launch_kwargs: dict[str, Any] = kwargs
 
-    def initComponent(self, name: str, path: tuple[str, ...], transport: AbstractTransport):
+    def initComponent(self, name: str, path: tuple[str, ...]):
         self.name: str = name
         self.path: tuple[str, ...] = path
-        self.transport: AbstractTransport = transport
         self.initialized = True
 
     def run(self):

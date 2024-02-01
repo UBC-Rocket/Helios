@@ -1,6 +1,5 @@
 from helios.helios import Helios
 
-from helios.transports.pipe import PipeTransport
 from helios.orchestrators.mp import MultiprocessingOrchestrator
 
 from helios.components.test.test_component import TestEventProducer, TestEventConsumer, TestEventSubscriber
@@ -11,7 +10,6 @@ def main():
     helios = Helios(
         "basic_test",
         friendly_name="Basic Test Profile",
-        transport=PipeTransport,
         orchestrator=MultiprocessingOrchestrator
     )
 
@@ -19,12 +17,12 @@ def main():
     rocket = helios.get_component_tree()
 
     rocket.add_component("test_producer", event_producer := TestEventProducer())
-        # rocket.add_component("test_consumer", TestEventConsumer())
-        # rocket.add_component("test_subscriber", TestEventSubscriber(source=event_producer.get_path()))
+    rocket.add_component("test_consumer", TestEventConsumer())
+    rocket.add_component("test_subscriber", TestEventSubscriber(source=event_producer.get_path()))
 
-        # group = rocket.create_component_group("test_group")
-        # group.add_component("test_producer_two", TestEventProducer(timeout=10))
-        # group.add_component("test_consumer_two", TestEventConsumer(timeout=20))
+    group = rocket.create_component_group("test_group")
+    group.add_component("test_producer_two", TestEventProducer(timeout=10))
+    group.add_component("test_consumer_two", TestEventConsumer(timeout=20))
 
     # Print the component tree
     print()

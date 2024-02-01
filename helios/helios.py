@@ -1,6 +1,5 @@
 from helios.orchestrators.orchestrator import AbstractOrchestrator
 from helios.components.component import ComponentGroup
-from helios.transports.transport import AbstractTransport
 
 from typing import Optional, Type
 
@@ -11,7 +10,6 @@ class Helios:
         base_name: str,
         *,
         friendly_name: str,
-        transport: Type[AbstractTransport],
         orchestrator: Type[AbstractOrchestrator]
     ):
         # For those unaware, the asterisk in the function signature indicates that the following parameters are keyword-only.
@@ -20,8 +18,7 @@ class Helios:
         # Argument-defined attributes
         self.base_name: str = base_name
         self.friendly_name: Optional[str] = friendly_name
-        self.transport: Type[AbstractTransport] = transport
-        self.orchestrator: AbstractOrchestrator = orchestrator(transport)
+        self.orchestrator: AbstractOrchestrator = orchestrator()
 
         # Other attributes
         self.component_tree: ComponentGroup = ComponentGroup(self.base_name)
