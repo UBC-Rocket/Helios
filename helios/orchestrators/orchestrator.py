@@ -5,8 +5,9 @@ from abc import ABC
 
 
 class AbstractOrchestrator(ABC):
-    def __init__(self):
-        pass
+    def __init__(self, grpc_host: str, grpc_port: int):
+        self.grpc_host: str = grpc_host
+        self.grpc_port: int = grpc_port
 
     def start_all(self, component_tree: ComponentGroup):
         def _start_all(comp: Union[ComponentGroup, ComponentManager]):
