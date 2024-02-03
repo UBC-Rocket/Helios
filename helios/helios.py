@@ -1,8 +1,7 @@
-from helios.orchestrator import AbstractOrchestrator
 from helios.component import ComponentGroup
 
 from concurrent import futures
-from typing import Optional, Type
+from typing import Optional
 import grpc
 
 
@@ -13,8 +12,7 @@ class Helios:
         grpc_host: str = "[::]",
         grpc_port: int = 50051,
         *,
-        friendly_name: str,
-        orchestrator: Type[AbstractOrchestrator]
+        friendly_name: str
     ):
         # For those unaware, the asterisk in the function signature indicates that the following parameters are keyword-only.
         # This means that they can only be passed by name, and not by position.
@@ -24,10 +22,6 @@ class Helios:
         self.grpc_host: str = grpc_host
         self.grpc_port: int = grpc_port
         self.friendly_name: Optional[str] = friendly_name
-        self.orchestrator: AbstractOrchestrator = orchestrator(
-            grpc_host=self.grpc_host,
-            grpc_port=self.grpc_port
-        )
 
         # Other attributes
         self.component_tree: ComponentGroup = ComponentGroup(self.base_name)
@@ -50,7 +44,7 @@ class Helios:
         self.grpc_server.start()
 
         # Start the components
-        self.orchestrator.start_all(self.component_tree)
+        # self.orchestrator.start_all(self.component_tree)
 
         # Wait until gRPC server is terminated
         self.grpc_server.wait_for_termination()
