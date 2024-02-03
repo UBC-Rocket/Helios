@@ -1,6 +1,5 @@
-from helios.component import ComponentGroup, ComponentManager
+from helios.component import AbstractComponent, ComponentGroup, AbstractComponentManager
 
-from typing import Union
 from abc import ABC
 
 
@@ -10,20 +9,20 @@ class AbstractOrchestrator(ABC):
         self.grpc_port: int = grpc_port
 
     def start_all(self, component_tree: ComponentGroup):
-        def _start_all(comp: Union[ComponentGroup, ComponentManager]):
+        def _start_all(comp: AbstractComponent):
             if isinstance(comp, ComponentGroup):
                 for _, subcomponent in comp.components.items():
                     _start_all(subcomponent)
-            else:
+            elif isinstance(comp, AbstractComponentManager):
                 self.start(comp)
 
         _start_all(component_tree)
 
-    def start(self, manager: ComponentManager):
+    def start(self, manager: AbstractComponentManager):
         raise NotImplementedError()
 
-    def stop(self, manager: ComponentManager):
+    def stop(self, manager: AbstractComponentManager):
         raise NotImplementedError()
 
-    def kill(self, manager: ComponentManager):
+    def kill(self, manager: AbstractComponentManager):
         raise NotImplementedError()

@@ -1,4 +1,5 @@
 from helios.helios import Helios
+from helios.component import ReferenceComponentManager
 from helios.orchestrators.multiprocess import MultiprocessingOrchestrator
 from helios.components.test.test_event_consumer import TestEventConsumer
 from helios.components.test.test_event_producer import TestEventProducer
@@ -16,13 +17,13 @@ def main():
     # Build component tree
     rocket = helios.get_component_tree()
 
-    rocket.add_component("test_producer", event_producer := TestEventProducer())
-    rocket.add_component("test_consumer", TestEventConsumer())
-    rocket.add_component("test_subscriber", TestEventSubscriber(source=event_producer.path))
+    rocket.add_component(event_producer := ReferenceComponentManager("test_producer", TestEventProducer()))
+    rocket.add_component(ReferenceComponentManager("test_consumer", TestEventConsumer()))
+    rocket.add_component(ReferenceComponentManager("test_subscriber", TestEventSubscriber(source=event_producer.get_path())))
 
     group = rocket.create_component_group("test_group")
-    group.add_component("test_producer_two", TestEventProducer(timeout=10))
-    group.add_component("test_consumer_two", TestEventConsumer(timeout=20))
+    group.add_component(ReferenceComponentManager("test_producer_two", TestEventProducer(timeout=10)))
+    group.add_component(ReferenceComponentManager("test_consumer_two", TestEventConsumer(timeout=20)))
 
     # Print the component tree
     print()
