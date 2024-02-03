@@ -1,4 +1,4 @@
-from helios.components.component import ComponentGroup, ComponentManager
+from helios.component import ComponentGroup, ComponentManager
 
 from typing import Union
 from abc import ABC

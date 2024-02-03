@@ -1,8 +1,8 @@
 from helios.helios import Helios
-
-from helios.orchestrators.mp import MultiprocessingOrchestrator
-
-from helios.components.test.test_component import TestEventProducer, TestEventConsumer, TestEventSubscriber
+from helios.orchestrators.multiprocess import MultiprocessingOrchestrator
+from helios.components.test.test_event_consumer import TestEventConsumer
+from helios.components.test.test_event_producer import TestEventProducer
+from helios.components.test.test_event_subscriber import TestEventSubscriber
 
 
 def main():
@@ -18,7 +18,7 @@ def main():
 
     rocket.add_component("test_producer", event_producer := TestEventProducer())
     rocket.add_component("test_consumer", TestEventConsumer())
-    rocket.add_component("test_subscriber", TestEventSubscriber(source=event_producer.get_path()))
+    rocket.add_component("test_subscriber", TestEventSubscriber(source=event_producer.path))
 
     group = rocket.create_component_group("test_group")
     group.add_component("test_producer_two", TestEventProducer(timeout=10))

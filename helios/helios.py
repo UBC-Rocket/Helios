@@ -1,5 +1,5 @@
-from helios.orchestrators.orchestrator import AbstractOrchestrator
-from helios.components.component import ComponentGroup
+from helios.orchestrator import AbstractOrchestrator
+from helios.component import ComponentGroup
 
 from concurrent import futures
 from typing import Optional, Type
