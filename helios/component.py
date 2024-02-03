@@ -40,6 +40,8 @@ class ComponentGroup():
         return (*self.parent.get_path(), self.name) if self.parent else (self.name,)
 
     def print_tree(self, last=True, header=''):
+        if not self.parent:
+            print("[HELIOS CORE]")
         children = list(self.components.values())
         elbow = "└──"
         pipe = "│  "
