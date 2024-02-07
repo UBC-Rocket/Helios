@@ -6,4 +6,5 @@ class TestEventConsumer(ComponentBase):
         super().__init__()
 
     def run(self, timeout: int = 0):
+        super().run()
         print(f"Hello TestEventConsumer from {self.path}!")

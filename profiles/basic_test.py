@@ -1,3 +1,4 @@
+import helios.fix_imports as import_fix  # noqa # Must be the first import!
 from helios.helios import Helios
 from helios.component import PyComponent
 from helios.components.test.test_event_consumer import TestEventConsumer

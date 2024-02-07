@@ -6,4 +6,5 @@ class TestEventProducer(ComponentBase):
         super().__init__()
 
     def run(self, timeout: int = 0):
+        super().run()
         print(f"Hello TestEventProducer from {self.path}!")

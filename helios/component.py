@@ -100,7 +100,7 @@ class PyComponent(AbstractComponentManager):
         if self.running:
             raise ValueError(f"Component {self.get_path()} is already running")
 
-        self.component_object.initComponent(
+        self.component_object.init_component(
             name=self.name,
             path=self.get_path(),
             grpc_host=server.grpc_host,

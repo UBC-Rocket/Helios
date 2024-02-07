@@ -1,4 +1,6 @@
 from helios.component import ComponentGroup
+from helios.protocol.generated.protocol_pb2_grpc import add_HeliosProtocolServicer_to_server
+from helios.protocol.impl import HeliosProtocol
 
 from concurrent import futures
 from typing import Optional
@@ -29,6 +31,9 @@ class Helios:
     def init_grpc_server(self):
         # Create the gRPC server instance
         self.grpc_server = grpc.server(futures.ThreadPoolExecutor(max_workers=10))
+
+        # Add protocol handler
+        add_HeliosProtocolServicer_to_server(HeliosProtocol(), self.grpc_server)
 
         # Add the bind info
         self.grpc_server.add_insecure_port(f"{self.grpc_host}:{self.grpc_port}")

@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import grpc
 from abc import ABC
 from typing import Any
+
 
 
 class ComponentBase(ABC):
@@ -10,7 +12,7 @@ class ComponentBase(ABC):
         self.launch_args: tuple[Any, ...] = args
         self.launch_kwargs: dict[str, Any] = kwargs
 
-    def initComponent(self, name: str, path: str, grpc_host: str, grpc_port: int):
+    def init_component(self, name: str, path: str, grpc_host: str, grpc_port: int):
         self.name: str = name
         self.path: str = path
         self.grpc_host: str = grpc_host
@@ -18,4 +20,9 @@ class ComponentBase(ABC):
         self.initialized = True
 
     def run(self):
-        raise NotImplementedError()
+        # Check if the component has been initialized
+        if not self.initialized:
+            raise ValueError("Component has not been initialized")
+
+        # Connect to the gRPC server
+        self.channel = grpc.insecure_channel(f"{self.grpc_host}:{self.grpc_port}")

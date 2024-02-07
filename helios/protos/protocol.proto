@@ -1,0 +1,14 @@
+syntax = "proto3";
+
+message HandshakeRequest {
+    string clientName = 1;
+    int32 clientVersion = 2;
+}
+
+message HandshakeResponse {
+    bool success = 1;
+}
+
+service HeliosProtocol {
+    rpc initial_handshake(HandshakeRequest) returns (HandshakeResponse);
+}
