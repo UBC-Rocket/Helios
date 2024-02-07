@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import helios.protocol.generated.protocol_pb2 as protocol_pb2
+import helios.protocol.generated.protocol_pb2_grpc as protocol_pb2_grpc
+
 import grpc
 from abc import ABC
 from typing import Any
-
 
 
 class ComponentBase(ABC):
@@ -26,3 +28,8 @@ class ComponentBase(ABC):
 
         # Connect to the gRPC server
         self.channel = grpc.insecure_channel(f"{self.grpc_host}:{self.grpc_port}")
+
+        # Send Handshake
+        self.stub = protocol_pb2_grpc.HeliosProtocolStub(self.channel)
+        response = self.stub.initial_handshake(protocol_pb2.HandshakeRequest())
+        print(f"Handshake response: {response.success}")
