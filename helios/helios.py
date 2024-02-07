@@ -9,14 +9,10 @@ class Helios:
     def __init__(
         self,
         base_name: str,
+        friendly_name: str,
         grpc_host: str = "[::]",
         grpc_port: int = 50051,
-        *,
-        friendly_name: str
     ):
-        # For those unaware, the asterisk in the function signature indicates that the following parameters are keyword-only.
-        # This means that they can only be passed by name, and not by position.
-
         # Argument-defined attributes
         self.base_name: str = base_name
         self.grpc_host: str = grpc_host
@@ -27,6 +23,7 @@ class Helios:
         self.component_tree: ComponentGroup = ComponentGroup(self.base_name)
 
     def get_component_tree(self) -> ComponentGroup:
+        # Return the component tree
         return self.component_tree
 
     def init_grpc_server(self):

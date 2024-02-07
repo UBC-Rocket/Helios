@@ -1,5 +1,6 @@
 {
     "python.languageServer": "Pylance",
     "files.trimFinalNewlines": true,
-    "files.trimTrailingWhitespace": true
+    "files.trimTrailingWhitespace": true,
+    "autoDocstring.docstringFormat": "numpy"
 }
