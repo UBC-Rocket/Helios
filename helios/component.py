@@ -6,12 +6,8 @@ if TYPE_CHECKING:
     from helios.components.base import ComponentBase
 
 from abc import ABC
-from typing import Optional, Any
+from typing import Optional
 from multiprocessing import Process
-
-
-def generate_component_path(component: AbstractComponent) -> tuple[str, ...]:
-    return (*generate_component_path(component.parent), component.name) if component.parent else (component.name,)
 
 
 class AbstractComponent(ABC):
@@ -19,7 +15,7 @@ class AbstractComponent(ABC):
         self.name: str = name
         self.parent: Optional[ComponentGroup] = parent
 
-    def get_path(self) -> tuple[str, ...]:
+    def get_path(self) -> str:
         raise NotImplementedError()
 
     def print_tree(self, last=True, header=''):
@@ -53,8 +49,8 @@ class ComponentGroup(AbstractComponent):
         else:
             raise ValueError(f"Component with name {component.name} is not a valid component")
 
-    def get_path(self) -> tuple[str, ...]:
-        return (*self.parent.get_path(), self.name) if self.parent else (self.name,)
+    def get_path(self) -> str:
+        return f"{self.parent.get_path()}.{self.name}" if self.parent else self.name
 
     def start_all(self, server: Helios):
         for c in self.components.values():
@@ -99,7 +95,6 @@ class PyComponent(AbstractComponentManager):
 
         self.component_object: ComponentBase = component_object
         self.process: Optional[Process] = None
-        self.reference: Any = None
 
     def start(self, server: Helios):
         if self.running:
@@ -112,17 +107,17 @@ class PyComponent(AbstractComponentManager):
             grpc_port=server.grpc_port
         )
 
-        self.reference = Process(
+        self.process = Process(
             target=self.component_object.run,
             args=self.component_object.launch_args,
             kwargs=self.component_object.launch_kwargs
         )
 
         self.running = True
-        self.reference.start()
+        self.process.start()
 
-    def get_path(self) -> tuple[str, ...]:
-        return (*self.parent.get_path(), self.name) if self.parent else (self.name,)
+    def get_path(self) -> str:
+        return f"{self.parent.get_path()}.{self.name}" if self.parent else self.name
 
     def print_tree(self, last=True, header=''):
         elbow = "└──"
