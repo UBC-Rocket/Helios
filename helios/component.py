@@ -110,7 +110,8 @@ class PyComponent(AbstractComponentManager):
         self.process = Process(
             target=self.component_object.run,
             args=self.component_object.launch_args,
-            kwargs=self.component_object.launch_kwargs
+            kwargs=self.component_object.launch_kwargs,
+            daemon=True
         )
 
         self.running = True
