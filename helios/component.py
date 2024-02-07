@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
+    from helios.helios import Helios
     from helios.components.base import ComponentBase
 
 from abc import ABC
 from typing import Optional, Any
+from multiprocessing import Process
 
 
 def generate_component_path(component: AbstractComponent) -> tuple[str, ...]:
@@ -54,6 +56,15 @@ class ComponentGroup(AbstractComponent):
     def get_path(self) -> tuple[str, ...]:
         return (*self.parent.get_path(), self.name) if self.parent else (self.name,)
 
+    def start_all(self, server: Helios):
+        for c in self.components.values():
+            if isinstance(c, AbstractComponentManager):
+                c.start(server)
+            elif isinstance(c, ComponentGroup):
+                c.start_all(server)
+            else:
+                raise ValueError(f"Component {c.get_path()} is not a valid component")
+
     def print_tree(self, last=True, header=''):
         if not self.parent:
             print("[HELIOS CORE]")
@@ -72,13 +83,43 @@ class AbstractComponentManager(AbstractComponent, ABC):
         super().__init__(name, parent)
         self.running: bool = False
 
+    def start(self, server: Helios):
+        raise NotImplementedError()
 
-class ReferenceComponentManager(AbstractComponentManager):
+    def stop(self, server: Helios):
+        raise NotImplementedError()
+
+    def kill(self, server: Helios):
+        raise NotImplementedError()
+
+
+class PyComponent(AbstractComponentManager):
     def __init__(self, name: str, component_object: ComponentBase):
         super().__init__(name)
 
         self.component_object: ComponentBase = component_object
+        self.process: Optional[Process] = None
         self.reference: Any = None
+
+    def start(self, server: Helios):
+        if self.running:
+            raise ValueError(f"Component {self.get_path()} is already running")
+
+        self.component_object.initComponent(
+            name=self.name,
+            path=self.get_path(),
+            grpc_host=server.grpc_host,
+            grpc_port=server.grpc_port
+        )
+
+        self.reference = Process(
+            target=self.component_object.run,
+            args=self.component_object.launch_args,
+            kwargs=self.component_object.launch_kwargs
+        )
+
+        self.running = True
+        self.reference.start()
 
     def get_path(self) -> tuple[str, ...]:
         return (*self.parent.get_path(), self.name) if self.parent else (self.name,)

@@ -44,7 +44,7 @@ class Helios:
         self.grpc_server.start()
 
         # Start the components
-        # self.orchestrator.start_all(self.component_tree)
+        self.component_tree.start_all(self)
 
         # Wait until gRPC server is terminated
         self.grpc_server.wait_for_termination()
