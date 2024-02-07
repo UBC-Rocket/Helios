@@ -1,0 +1,5 @@
+syntax = "proto3";
+
+message TestEvent {
+    int32 value = 1;
+}
