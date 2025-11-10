@@ -1,0 +1,3 @@
+[submodule "proto/helios"]
+	path = proto/helios
+	url = git@github.com:UBC-Rocket/Helios-Proto.git
