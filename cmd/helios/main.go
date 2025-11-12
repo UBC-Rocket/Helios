@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	SELF_NAME = "HeliosCore"
+	SELF_NAME = "Helios"
 	NET_NAME = "HeliosNet"
 	PORT = "5000"
 )
@@ -25,17 +25,25 @@ var wg sync.WaitGroup
 
 
 func main() {
+	runtime_hash := os.Getenv("RUNTIME_HASH")
+	docker_disabled := os.Getenv("DOCKER_DISABLED")
+	if docker_disabled == "1" {
+		fmt.Println("Docker is disabled. Exiting.")
+		return // TODO: Implement the local network stuff here instead
+		// Probably seperate into seperate function files
+		// I.e. one for docker.go, the other for local.go or something
+	}
+
 	fmt.Println("Main function started")
 
 	images := []dockerhandler.ImageInfo{
-		{"RocketDecoder", "../RocketDecoder", "rocketdecoder:latest", "", nil},
+		//{"RocketDecoder", "../RocketDecoder", "rocketdecoder:latest", "", nil},
 		//{"UI", "../UI", "ui:latest", "", nil},
-		{"Livestream", "../Livestream", "livestream:latest", "", nil},
+		//{"Livestream", "../Livestream", "livestream:latest", "", nil},
 	}
 
 	// Create new docker client
 	dh := dockerhandler.Initialize()
-	runtime_hash := os.Getenv("RUNTIME_HASH")
 
 	defer dh.Close()
 
@@ -51,10 +59,10 @@ func main() {
 
 	// Get own container's ID
 	self_id := dh.GetContainerID(SELF_NAME)
-	if self_id == "" { panic("HeliosCore ID not found.")}
+	if self_id == "" { panic(SELF_NAME + "ID not found.") }
 
-	// Add HeliosCore to the network
-	fmt.Println("Adding HeliosCore to HeliosNet...")
+	// Add Helios to the network
+	fmt.Println("Adding", SELF_NAME, "to", NET_NAME, "...")
 	dh.AddContainerToNetwork(self_id)
 
 	// Start all initial containers
@@ -67,7 +75,7 @@ func main() {
 
 // Listen for messages from a specific connection
 func listenForMessages(name string, c net.Conn) {
-  packet := []byte("Hello from HeliosCore!")
+  packet := []byte("Hello from Helios!")
 
 	c.Write(packet)
 

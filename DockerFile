@@ -10,18 +10,15 @@ RUN go mod download
 
 COPY . ./
 
-# TODO: Ensure that this works
-COPY Makefile ./
-
-RUN make build
+RUN CGO_ENABLED=0 GOOS=linux go build -o bin/helios ./cmd/helios
 
 # Runtime
 FROM alpine:latest
 
 WORKDIR /app
 
-COPY --from=builder /app/bin/ .
+COPY --from=builder /app/bin/ /app/bin
 
 EXPOSE 8080
 
-CMD ["./helios"]
+CMD ["./bin/helios"]

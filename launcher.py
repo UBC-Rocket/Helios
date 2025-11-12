@@ -13,7 +13,7 @@ LOCAL = os.path.dirname(sys.executable)
 
 client = docker.from_env()
 images = {
-  # "HeliosCore": ('../HeliosCore', 'helioscore:latest'),
+  "Helios": ('./', 'helios:latest'),
   # "RocketDecoder": ('../RocketDecoder', 'rocketdecoder:latest'),
   # #"UI": ('../UI', 'ui:latest'),
   # "Livestream": ('../Livestream', 'livestream:latest')
@@ -36,41 +36,41 @@ def main():
   print('Building Docker images...')  
   build_images(client, images)
   
-  print('Starting HeliosCore container...')
-  StartHeliosCore()
+  print('Starting Helios container...')
+  StartHelios()
 
 
-def StartHeliosCore():
-  HeliosCore = images["HeliosCore"]
-  HeliosCoreContainer = None
+def StartHelios():
+  Helios = images["Helios"]
+  HeliosContainer = None
 
-  # Check if there is an existing HeliosCore container
+  # Check if there is an existing Helios container
   # Either remove or restart it based on hash comparison
-  existing_containers = client.containers.list(all=True, filters={"name": "HeliosCore"})
+  existing_containers = client.containers.list(all=True, filters={"name": "Helios"})
   if existing_containers:
     existing_container = existing_containers[0]
     existing_hash = existing_container.labels.get('runtime_hash', None)
     
     if existing_hash == RUNTIME_HASH:
       if existing_container.status == "running":
-        print("HeliosCore container is already running. No additional builds will be run.")
+        print("Helios container is already running. No additional builds will be run.")
         return
       elif existing_container.status == "exited":
-        print("HeliosCore container is up-to-date. Starting it back up...")
+        print("Helios container is up-to-date. Starting it back up...")
 
         existing_container.restart()
-        HeliosCoreContainer = existing_container
+        HeliosContainer = existing_container
         return
     else:
-      print("HeliosCore container is outdated. Removing it...")
+      print("Helios container is outdated. Removing it...")
       existing_container.remove(force=True)
 
-  # Create the HeliosCore container if not found or removed
-  if HeliosCoreContainer is None:
-    print("Starting a new HeliosCore container...")
-    HeliosCoreContainer = client.containers.run(
-      HeliosCore[1], 
-      name='HeliosCore', 
+  # Create the Helios container if not found or removed
+  if HeliosContainer is None:
+    print("Starting a new Helios container...")
+    HeliosContainer = client.containers.run(
+      Helios[1], 
+      name='Helios', 
       detach=True,
       volumes=volumes_config, # Give the container access to docker.sock
       labels={
@@ -81,7 +81,7 @@ def StartHeliosCore():
       }
     )
 
-  #TODO: Send the component tree and images over to HeliosCore
+  #TODO: Send the component tree and images over to Helios
 
 
 def build_images(client, images):
