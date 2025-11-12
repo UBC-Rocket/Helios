@@ -5,7 +5,8 @@ BINARY_NAME=helios
 BUILD_DIR=bin
 MAIN_PATH=./cmd/helios
 
-DOCKER_DISABLED=1 # 1=true, 0=false
+# 1=true, 0=false
+DOCKER_DISABLED=1
 export DOCKER_DISABLED
 
 # Commands
