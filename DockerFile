@@ -1,0 +1,27 @@
+# Builder
+FROM golang:1.25.2 AS builder
+
+WORKDIR /app
+
+COPY /internal /app/internal
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . ./
+
+# TODO: Ensure that this works
+COPY Makefile ./
+
+RUN make build
+
+# Runtime
+FROM alpine:latest
+
+WORKDIR /app
+
+COPY --from=builder /app/bin/ .
+
+EXPOSE 8080
+
+CMD ["./helios"]
