@@ -4,7 +4,9 @@
 BINARY_NAME=helios
 BUILD_DIR=bin
 MAIN_PATH=./cmd/helios
-DOCKER_DISABLED=1
+
+DOCKER_DISABLED=1 # 1=true, 0=false
+export DOCKER_DISABLED
 
 # Commands
 build:
@@ -15,7 +17,6 @@ deps:
 	go mod tidy
 
 run:
-	export DOCKER_DISABLED
 	go run $(MAIN_PATH)	
 
 clean:

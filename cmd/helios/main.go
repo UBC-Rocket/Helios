@@ -12,8 +12,8 @@ import (
 
 const (
 	SELF_NAME = "Helios"
-	NET_NAME = "HeliosNet"
-	PORT = "5000"
+	NET_NAME  = "HeliosNet"
+	PORT      = "5000"
 )
 
 type DockerResponse struct {
@@ -23,10 +23,10 @@ type DockerResponse struct {
 
 var wg sync.WaitGroup
 
-
 func main() {
 	runtime_hash := os.Getenv("RUNTIME_HASH")
 	docker_disabled := os.Getenv("DOCKER_DISABLED")
+
 	if docker_disabled == "1" {
 		fmt.Println("Docker is disabled. Exiting.")
 		return // TODO: Implement the local network stuff here instead
@@ -49,7 +49,9 @@ func main() {
 
 	// Start the docker network
 	HeliosNet, netErr := dh.StartDockerNetwork(NET_NAME)
-	if netErr != nil { panic(netErr) }
+	if netErr != nil {
+		panic(netErr)
+	}
 
 	// Start the port connection and pass a channel for new connection updates
 	wg.Add(1)
@@ -59,7 +61,9 @@ func main() {
 
 	// Get own container's ID
 	self_id := dh.GetContainerID(SELF_NAME)
-	if self_id == "" { panic(SELF_NAME + "ID not found.") }
+	if self_id == "" {
+		panic(SELF_NAME + "ID not found.")
+	}
 
 	// Add Helios to the network
 	fmt.Println("Adding", SELF_NAME, "to", NET_NAME, "...")
@@ -75,7 +79,7 @@ func main() {
 
 // Listen for messages from a specific connection
 func listenForMessages(name string, c net.Conn) {
-  packet := []byte("Hello from Helios!")
+	packet := []byte("Hello from Helios!")
 
 	c.Write(packet)
 
@@ -94,12 +98,14 @@ func listenForMessages(name string, c net.Conn) {
 		}
 
 		// If server received some bytes
-		if n > 0 { 
+		if n > 0 {
 			p = append(p[:], tmp[:n]...)
 		}
 
 		end := byte('~')
-		if (p[len(p)-1] == end) { break }
+		if p[len(p)-1] == end {
+			break
+		}
 	}
 	//num, _ := c.Write(p)
 	fmt.Printf("%s - Received %d bytes, the payload is %s\n", name, len(p), string(p))
@@ -109,7 +115,7 @@ func listenForMessages(name string, c net.Conn) {
 // Handle a new connection passed to the channel
 func handleNewConnection(images []dockerhandler.ImageInfo, conn chan dockerhandler.NewConnection) {
 	for {
-		c := <- conn
+		c := <-conn
 
 		for _, img := range images {
 			if img.Name == c.Name {
