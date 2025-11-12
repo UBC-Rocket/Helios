@@ -20,7 +20,9 @@ type NewConnection struct {
 // Returns the network and any errors
 func (c *Client) StartDockerNetwork(networkName string) (resp network.CreateResponse, errResp error) {
 	list, netErr := c.cli.NetworkList(c.ctx, network.ListOptions{})
-	if netErr != nil {	panic(netErr) }
+	if netErr != nil {
+		panic(netErr)
+	}
 
 	for _, net := range list {
 		if net.Name == networkName {
@@ -35,9 +37,11 @@ func (c *Client) StartDockerNetwork(networkName string) (resp network.CreateResp
 	result, err := c.cli.NetworkCreate(c.ctx, networkName, network.CreateOptions{
 		Driver: "bridge",
 	})
-	if err != nil { return network.CreateResponse{}, err }
+	if err != nil {
+		return network.CreateResponse{}, err
+	}
 	fmt.Println("'", networkName, "' network created:", resp.ID)
-	
+
 	c.net = result
 	return result, nil
 }
@@ -61,7 +65,7 @@ func (c *Client) GetContainerInfoFromIP(ip string) (name string, id string) {
 			if net.IPAddress == x[0] {
 				return c.Names[0][1:], c.ID
 			}
-		} 
+		}
 	}
 	return "", ""
 }
