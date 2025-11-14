@@ -6,7 +6,7 @@ import (
 	packet "helios/generated/go/transport"
 )
 
-func CreateTrackportPacket(id int32, address string, data []byte) (*packet.TransportPacket, error) {
+func CreateTransportPacket(id int32, address string, data []byte) (*packet.TransportPacket, error) {
 	pkt := &packet.TransportPacket{
 		Id:      id,
 		Address: address,
@@ -15,7 +15,7 @@ func CreateTrackportPacket(id int32, address string, data []byte) (*packet.Trans
 	return pkt, nil
 }
 
-func MarshalTrackportPacket(pkt *packet.TransportPacket) ([]byte, error) {
+func MarshalTransportPacket(pkt *packet.TransportPacket) ([]byte, error) {
 	data, err := proto.Marshal(pkt)
 	if err != nil {
 		return nil, err

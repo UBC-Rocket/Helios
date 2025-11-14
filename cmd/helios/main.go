@@ -29,8 +29,8 @@ func main() {
 	docker_disabled := os.Getenv("DOCKER_DISABLED")
 
 	if docker_disabled == "1" {
-		pkt, _ := commhandler.CreateTrackportPacket(123, "123", []byte("Test Data"));
-		data, _ := commhandler.MarshalTrackportPacket(pkt)
+		pkt, _ := commhandler.CreateTransportPacket(123, "123", []byte("Test Data"));
+		data, _ := commhandler.MarshalTransportPacket(pkt)
 		fmt.Println("Marshalled Packet Data:", data)
 
 		fmt.Println("Docker is disabled. Exiting.")
