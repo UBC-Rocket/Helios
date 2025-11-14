@@ -1,4 +1,4 @@
-.PHONY: build deps run clean
+.PHONY: build deps run clean proto
 
 # Variables
 BINARY_NAME=helios
@@ -17,10 +17,6 @@ export DOCKER_DISABLED
 
 # Commands
 build:
-	$(foreach f, $(PROTO_LANGS), \
-		$(call build_proto,$(f)) \
-	)
-
 	go build -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_PATH)
 
 deps:
@@ -36,8 +32,13 @@ clean:
 	rm -rf $(BUILD_DIR)
 	go clean
 
+proto:
+	$(foreach f, $(PROTO_LANGS), \
+		$(call build_proto,$(f)) \
+	)
+
 define build_proto
 	@echo "Generating protobuf files for language: $(1)"
 	protoc -I=$(PROTO_SOURCE_DIR) --$(1)_out=$(PROTO_BUILD_DIR)/$(1) $(PROTO_SRC)
-	
+
 endef
