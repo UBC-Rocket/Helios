@@ -1,5 +1,6 @@
 bin/
 __pycache__/
 .venv/
+generated/
 
 .python-version
