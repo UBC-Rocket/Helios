@@ -2,7 +2,7 @@ syntax = "proto3";
 
 package helios.config;
 
-option go_package = "helios/generated/config";
+option go_package = "/config";
 
 message BaseComponent {
   string name = 1;

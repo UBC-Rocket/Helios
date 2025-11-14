@@ -4,7 +4,7 @@ package helios.transport;
 
 import "google/protobuf/timestamp.proto";
 
-option go_package = "helios/generated/transport";
+option go_package = "/transport";
 
 message TransportPacket {
     int32 id = 1;

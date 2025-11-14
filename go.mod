@@ -2,7 +2,10 @@ module helios
 
 go 1.24.9
 
-require github.com/docker/docker v28.3.2+incompatible
+require (
+	github.com/docker/docker v28.3.2+incompatible
+	google.golang.org/protobuf v1.36.8
+)
 
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
