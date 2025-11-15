@@ -4,6 +4,9 @@ import sys
 import time
 import threading
 
+from google.protobuf import json_format
+import generated.python.config.component_pb2 as component
+
 # Prune leftover stopped containers from build step
 os.environ["DOCKER_BUILDKIT"] = "1"
 
@@ -35,12 +38,15 @@ def main():
   print('Starting launcher with hash:', RUNTIME_HASH)
   print('Building Docker images...')  
   build_images(client, images)
+
+  tree, path = generateComponentTree()
+  print('Generated component tree:', json_format.MessageToJson(tree))
   
   print('Starting Helios container...')
-  StartHelios()
+  StartHelios(path)
 
 
-def StartHelios():
+def StartHelios(tree_path = None):
   Helios = images["Helios"]
   HeliosContainer = None
 
@@ -77,7 +83,8 @@ def StartHelios():
         'runtime_hash': RUNTIME_HASH
       },
       environment={
-        'RUNTIME_HASH': RUNTIME_HASH
+        'RUNTIME_HASH': RUNTIME_HASH,
+        'COMPONENT_TREE_PATH': tree_path if tree_path else ''
       }
     )
 
@@ -112,6 +119,32 @@ def _build_image(client, path, tag):
 
   print(f"Image '{image.tags[0]}' built successfully in {round(time.time() - start, 2)}s.")
 
+
+def generateComponentTree():
+  # Example of generating a component tree using protobuf
+  leaf_component = component.BaseComponent()
+  leaf_component.name = "LeafComponent"
+  leaf = component.Component()
+  leaf.path = "/path/to/leaf"
+  leaf.tag = "leaf_tag"
+  leaf.id = "leaf_1"
+  leaf_component.leaf.CopyFrom(leaf)
+
+  branch_component = component.ComponentGroup()
+  branch_component.children.extend([leaf_component])
+
+  root = component.BaseComponent()
+  root.name = "RootComponent"
+  root.branch.CopyFrom(branch_component)
+
+  component_tree = component.ComponentTree()
+  component_tree.root.CopyFrom(root)
+  component_tree.version = "1.0.0"
+
+  with open("component_tree.json", "w") as f:
+    f.write(json_format.MessageToJson(component_tree))
+
+  return component_tree, "component_tree.json"
 
 
 if __name__ == "__main__":
