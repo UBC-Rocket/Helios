@@ -15,18 +15,9 @@ PROTO_SRC := $(wildcard $(PROTO_SOURCE_DIR)/**/*.proto)
 DOCKER_DISABLED=1
 export DOCKER_DISABLED
 
-# Detect OS
-ifeq ($(OS),Windows_NT)
-    SHELL := cmd.exe
-    .SHELLFLAGS := /c
-    MKDIR = if not exist $(subst /,\,$(1)) mkdir $(subst /,\,$(1))
-    RM = rmdir /s /q
-    SEPARATOR = \\
-else
-    MKDIR = mkdir -p $(1)
-    RM = rm -rf
-    SEPARATOR = /
-endif
+MKDIR = mkdir -p $(1)
+RM = rm -rf
+SEPARATOR = /
 
 # Commands
 build:
