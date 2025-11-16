@@ -47,8 +47,8 @@ def main():
 
 
 def start_helios(client: docker.DockerClient, tree_path: Path | None = None):
-  Helios = IMAGES["Helios"]
-  HeliosContainer = None
+  helios = IMAGES["Helios"]
+  helios_container = None
 
   # Check if there is an existing Helios container
   # Either remove or restart it based on hash comparison
@@ -65,17 +65,17 @@ def start_helios(client: docker.DockerClient, tree_path: Path | None = None):
         print("Helios container is up-to-date. Starting it back up...")
 
         existing_container.restart()
-        HeliosContainer = existing_container
+        helios_container = existing_container
         return
     else:
       print("Helios container is outdated. Removing it...")
       existing_container.remove(force=True)
 
   # Create the Helios container if not found or removed
-  if HeliosContainer is None:
+  if helios_container is None:
     print("Starting a new Helios container...")
-    HeliosContainer = client.containers.run(
-      Helios[1], 
+    helios_container = client.containers.run(
+      helios[1], 
       name='Helios', 
       detach=True,
       volumes=VOLUME_CONFIG, # Give the container access to docker.sock
