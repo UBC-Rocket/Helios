@@ -122,6 +122,8 @@ def _build_image(client, path, tag):
 
 def generateComponentTree():
   # Example of generating a component tree using protobuf
+  tree_location = "./component_tree.json"
+
   leaf_component = component.BaseComponent()
   leaf_component.name = "LeafComponent"
   leaf = component.Component()
@@ -141,10 +143,10 @@ def generateComponentTree():
   component_tree.root.CopyFrom(root)
   component_tree.version = "1.0.0"
 
-  with open("component_tree.json", "w") as f:
+  with open(tree_location, "w") as f:
     f.write(json_format.MessageToJson(component_tree))
 
-  return component_tree, "component_tree.json"
+  return component_tree, tree_location
 
 
 if __name__ == "__main__":

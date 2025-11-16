@@ -4,3 +4,4 @@ __pycache__/
 generated/
 
 .python-version
+component_tree.json
