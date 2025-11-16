@@ -10,19 +10,16 @@ import generated.python.config.component_pb2 as component
 # Prune leftover stopped containers from build step
 os.environ["DOCKER_BUILDKIT"] = "1"
 
-build_threads = []
-
 LOCAL = os.path.dirname(sys.executable)
 
-client = docker.from_env()
-images = {
+IMAGES = {
   "Helios": ('./', 'helios:latest'),
   # "RocketDecoder": ('../RocketDecoder', 'rocketdecoder:latest'),
   # #"UI": ('../UI', 'ui:latest'),
   # "Livestream": ('../Livestream', 'livestream:latest')
 }
 
-volumes_config = {
+VOLUME_CONFIG = {
   '/var/run/docker.sock': {
     'bind': '/var/run/docker.sock',
     'mode': 'rw' # Read-write access
@@ -31,23 +28,24 @@ volumes_config = {
 
 with open('./runtime_hash.txt', 'r') as runtime_hash_file:
   RUNTIME_HASH = f"{runtime_hash_file.readline().strip()}-{time.time()}"
-
-# Have logic for changing or using current runtime hash here
+  # Have logic for changing or using current runtime hash here
 
 def main():
+  client = docker.from_env()
+
   print('Starting launcher with hash:', RUNTIME_HASH)
   print('Building Docker images...')  
-  build_images(client, images)
+  build_images(client, IMAGES)
 
   tree, path = generate_component_tree()
   print('Generated component tree:', json_format.MessageToJson(tree))
   
   print('Starting Helios container...')
-  start_helios(path)
+  start_helios(client, path)
 
 
-def start_helios(tree_path = None):
-  Helios = images["Helios"]
+def start_helios(client, tree_path: str | None = None):
+  Helios = IMAGES["Helios"]
   HeliosContainer = None
 
   # Check if there is an existing Helios container
@@ -78,7 +76,7 @@ def start_helios(tree_path = None):
       Helios[1], 
       name='Helios', 
       detach=True,
-      volumes=volumes_config, # Give the container access to docker.sock
+      volumes=VOLUME_CONFIG, # Give the container access to docker.sock
       labels={
         'runtime_hash': RUNTIME_HASH
       },
@@ -92,6 +90,8 @@ def start_helios(tree_path = None):
 
 
 def build_images(client, images):
+  build_threads = []
+
   try:
     for image in images:
       (build_context_path, image_tag) = images[image]
