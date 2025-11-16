@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package helios.transport;
+
+import "google/protobuf/timestamp.proto";
+
+message TransportPacket {
+    int32 id = 1;
+    google.protobuf.Timestamp timestamp = 2;
+    string address = 3;
+    bytes data = 4;
+}
