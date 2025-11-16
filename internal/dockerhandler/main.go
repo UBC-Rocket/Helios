@@ -22,7 +22,7 @@ type ImageInfo struct {
 }
 
 // TODO: Add component tree here?
-type Client struct {
+type DockerClient struct {
 	mu     sync.RWMutex
 	cli    *client.Client
 	ctx    context.Context
@@ -31,26 +31,26 @@ type Client struct {
 }
 
 // Initialize the Docker client.
-func Initialize() *Client {
+func Initialize() *DockerClient {
 	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		panic(err)
 	}
-	return &Client{
+	return &DockerClient{
 		cli: cli,
 		ctx: ctx,
 	}
 }
 
 // Close the Docker client.
-func (c *Client) Close() {
+func (c *DockerClient) Close() {
 	c.cli.Close()
 }
 
 // Get the ID of an existing container given it's name.
 // Returns the ID if found and "" if it does not exist.
-func (c *Client) GetContainerID(containerName string) (containerID string) {
+func (c *DockerClient) GetContainerID(containerName string) (containerID string) {
 	list := c.GetContainers()
 	var contID string = ""
 
@@ -65,7 +65,7 @@ func (c *Client) GetContainerID(containerName string) (containerID string) {
 }
 
 // Get a list of all containers.
-func (c *Client) GetContainers() (summary []container.Summary) {
+func (c *DockerClient) GetContainers() (summary []container.Summary) {
 	list, err := c.cli.ContainerList(c.ctx, container.ListOptions{All: true})
 	if err != nil {
 		panic(err)
@@ -75,7 +75,7 @@ func (c *Client) GetContainers() (summary []container.Summary) {
 
 // Create a container using information from the image struct and runtime_hash.
 // It should be checked if a container already exists with the same name and hash before calling this function.
-func (c *Client) CreateContainer(img ImageInfo, runtime_hash string) (response container.CreateResponse, error error) {
+func (c *DockerClient) CreateContainer(img ImageInfo, runtime_hash string) (response container.CreateResponse, error error) {
 	fmt.Println("Pulling " + img.Tag + " image...")
 
 	// Create container
@@ -95,7 +95,7 @@ func (c *Client) CreateContainer(img ImageInfo, runtime_hash string) (response c
 
 // Start all containers passed in the images array.
 // This function will update the array with the container ID once started
-func (c *Client) StartAllContainers(images *[]ImageInfo, runtime_hash string, HeliosNet network.CreateResponse) {
+func (c *DockerClient) StartAllContainers(images *[]ImageInfo, runtime_hash string, HeliosNet network.CreateResponse) {
 	list := c.GetContainers()
 
 	for _, img := range *images {
@@ -161,7 +161,7 @@ func (c *Client) StartAllContainers(images *[]ImageInfo, runtime_hash string, He
 }
 
 // Start a docker container by ID.
-func (c *Client) StartContainer(ID string) {
+func (c *DockerClient) StartContainer(ID string) {
 
 	// Start container
 	//fmt.Printf("Starting a new %s container...\n", img.Name)
