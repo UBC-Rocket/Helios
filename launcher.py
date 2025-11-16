@@ -1,8 +1,10 @@
 import docker
+import docker.errors
 import os
 import sys
 import time
 import threading
+from pathlib import Path
 
 from google.protobuf import json_format
 import generated.python.config.component_pb2 as component
@@ -39,12 +41,12 @@ def main():
 
   tree, path = generate_component_tree()
   print('Generated component tree:', json_format.MessageToJson(tree))
-  
+
   print('Starting Helios container...')
   start_helios(client, path)
 
 
-def start_helios(client, tree_path: str | None = None):
+def start_helios(client: docker.DockerClient, tree_path: Path | None = None):
   Helios = IMAGES["Helios"]
   HeliosContainer = None
 
@@ -82,14 +84,14 @@ def start_helios(client, tree_path: str | None = None):
       },
       environment={
         'RUNTIME_HASH': RUNTIME_HASH,
-        'COMPONENT_TREE_PATH': tree_path if tree_path else ''
+        'COMPONENT_TREE_PATH': str(tree_path) if tree_path else ''
       }
     )
 
   #TODO: Send the component tree and images over to Helios
 
 
-def build_images(client, images):
+def build_images(client: docker.DockerClient, images: dict):
   build_threads = []
 
   try:
@@ -113,16 +115,16 @@ def build_images(client, images):
   for i in range(len(build_threads)):
     build_threads[i].join()
 
-def _build_image(client, path, tag):
+def _build_image(client: docker.DockerClient, path: str, tag: str):
   start = time.time()
   image, build_logs = client.images.build(path=path, tag=tag, rm=True)
 
   print(f"Image '{image.tags[0]}' built successfully in {round(time.time() - start, 2)}s.")
 
 
-def generate_component_tree():
+def generate_component_tree() -> tuple[component.ComponentTree, Path]:
   # Example of generating a component tree using protobuf
-  tree_location = "./component_tree.json"
+  tree_location = Path("./component_tree.json")
 
   leaf_component = component.BaseComponent()
   leaf_component.name = "LeafComponent"
