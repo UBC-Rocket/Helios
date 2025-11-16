@@ -7,7 +7,12 @@ import (
 	"os"
 	"sync"
 
+	"helios/internal/commhandler"
 	"helios/internal/dockerhandler"
+
+	"helios/generated/go/config"
+
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 const (
@@ -26,8 +31,15 @@ var wg sync.WaitGroup
 func main() {
 	runtime_hash := os.Getenv("RUNTIME_HASH")
 	docker_disabled := os.Getenv("DOCKER_DISABLED")
+	component_tree_path := os.Getenv("COMPONENT_TREE_PATH")
+
+	extractComponentTree(component_tree_path)
 
 	if docker_disabled == "1" {
+		pkt, _ := commhandler.CreateTransportPacket(123, "123", []byte("Test Data"))
+		data, _ := commhandler.MarshalTransportPacket(pkt)
+		fmt.Println("Marshalled Packet Data:", data)
+
 		fmt.Println("Docker is disabled. Exiting.")
 		return // TODO: Implement the local network stuff here instead
 		// Probably seperate into seperate function files
@@ -75,6 +87,19 @@ func main() {
 	// Stop the main program from terminating
 	// All code is now running in goroutines
 	wg.Wait()
+}
+
+func extractComponentTree(tree_path string) {
+	data, err := os.ReadFile(tree_path)
+	if err != nil {
+		panic(err)
+	}
+	component_tree := &config.ComponentTree{}
+	err = protojson.Unmarshal(data, component_tree)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("Extracted component tree:", protojson.Format(component_tree))
 }
 
 // Listen for messages from a specific connection

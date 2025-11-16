@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package helios.config;
+
+option go_package = "/config";
+
+message BaseComponent {
+  string name = 1;
+
+  oneof node_type {
+    Component leaf = 2;
+    ComponentGroup branch = 3;
+  }
+}
+
+message Component {
+  string path = 1;
+  string tag = 2;
+  string id = 3;
+}
+
+message ComponentGroup {
+  repeated BaseComponent children = 1;
+}
+
+message ComponentTree {
+  BaseComponent root = 1;
+  string version = 2;
+}

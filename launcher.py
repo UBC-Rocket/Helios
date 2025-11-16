@@ -1,25 +1,27 @@
 import docker
+import docker.errors
 import os
 import sys
 import time
 import threading
+from pathlib import Path
+
+from google.protobuf import json_format
+import generated.python.config.component_pb2 as component
 
 # Prune leftover stopped containers from build step
 os.environ["DOCKER_BUILDKIT"] = "1"
 
-build_threads = []
-
 LOCAL = os.path.dirname(sys.executable)
 
-client = docker.from_env()
-images = {
+IMAGES = {
   "Helios": ('./', 'helios:latest'),
   # "RocketDecoder": ('../RocketDecoder', 'rocketdecoder:latest'),
   # #"UI": ('../UI', 'ui:latest'),
   # "Livestream": ('../Livestream', 'livestream:latest')
 }
 
-volumes_config = {
+VOLUME_CONFIG = {
   '/var/run/docker.sock': {
     'bind': '/var/run/docker.sock',
     'mode': 'rw' # Read-write access
@@ -28,21 +30,25 @@ volumes_config = {
 
 with open('./runtime_hash.txt', 'r') as runtime_hash_file:
   RUNTIME_HASH = f"{runtime_hash_file.readline().strip()}-{time.time()}"
-
-# Have logic for changing or using current runtime hash here
+  # Have logic for changing or using current runtime hash here
 
 def main():
+  client = docker.from_env()
+
   print('Starting launcher with hash:', RUNTIME_HASH)
   print('Building Docker images...')  
-  build_images(client, images)
-  
+  build_images(client, IMAGES)
+
+  tree, path = generate_component_tree()
+  print('Generated component tree:', json_format.MessageToJson(tree))
+
   print('Starting Helios container...')
-  StartHelios()
+  start_helios(client, path)
 
 
-def StartHelios():
-  Helios = images["Helios"]
-  HeliosContainer = None
+def start_helios(client: docker.DockerClient, tree_path: Path | None = None):
+  helios = IMAGES["Helios"]
+  helios_container = None
 
   # Check if there is an existing Helios container
   # Either remove or restart it based on hash comparison
@@ -59,32 +65,35 @@ def StartHelios():
         print("Helios container is up-to-date. Starting it back up...")
 
         existing_container.restart()
-        HeliosContainer = existing_container
+        helios_container = existing_container
         return
     else:
       print("Helios container is outdated. Removing it...")
       existing_container.remove(force=True)
 
   # Create the Helios container if not found or removed
-  if HeliosContainer is None:
+  if helios_container is None:
     print("Starting a new Helios container...")
-    HeliosContainer = client.containers.run(
-      Helios[1], 
+    helios_container = client.containers.run(
+      helios[1], 
       name='Helios', 
       detach=True,
-      volumes=volumes_config, # Give the container access to docker.sock
+      volumes=VOLUME_CONFIG, # Give the container access to docker.sock
       labels={
         'runtime_hash': RUNTIME_HASH
       },
       environment={
-        'RUNTIME_HASH': RUNTIME_HASH
+        'RUNTIME_HASH': RUNTIME_HASH,
+        'COMPONENT_TREE_PATH': str(tree_path) if tree_path else ''
       }
     )
 
   #TODO: Send the component tree and images over to Helios
 
 
-def build_images(client, images):
+def build_images(client: docker.DockerClient, images: dict[str, tuple[str, str]]):
+  build_threads = []
+
   try:
     for image in images:
       (build_context_path, image_tag) = images[image]
@@ -106,12 +115,40 @@ def build_images(client, images):
   for i in range(len(build_threads)):
     build_threads[i].join()
 
-def _build_image(client, path, tag):
+def _build_image(client: docker.DockerClient, path: str, tag: str):
   start = time.time()
   image, build_logs = client.images.build(path=path, tag=tag, rm=True)
 
   print(f"Image '{image.tags[0]}' built successfully in {round(time.time() - start, 2)}s.")
 
+
+def generate_component_tree() -> tuple[component.ComponentTree, Path]:
+  # Example of generating a component tree using protobuf
+  tree_location = Path("./component_tree.json")
+
+  leaf_component = component.BaseComponent()
+  leaf_component.name = "LeafComponent"
+  leaf = component.Component()
+  leaf.path = "/path/to/leaf"
+  leaf.tag = "leaf_tag"
+  leaf.id = "leaf_1"
+  leaf_component.leaf.CopyFrom(leaf)
+
+  branch_component = component.ComponentGroup()
+  branch_component.children.extend([leaf_component])
+
+  root = component.BaseComponent()
+  root.name = "RootComponent"
+  root.branch.CopyFrom(branch_component)
+
+  component_tree = component.ComponentTree()
+  component_tree.root.CopyFrom(root)
+  component_tree.version = "1.0.0"
+
+  with open(tree_location, "w") as f:
+    f.write(json_format.MessageToJson(component_tree))
+
+  return component_tree, tree_location
 
 
 if __name__ == "__main__":

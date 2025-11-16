@@ -6,4 +6,5 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "docker>=7.1.0",
+    "protobuf>=6.33.1",
 ]
