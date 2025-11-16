@@ -91,7 +91,7 @@ def start_helios(client: docker.DockerClient, tree_path: Path | None = None):
   #TODO: Send the component tree and images over to Helios
 
 
-def build_images(client: docker.DockerClient, images: dict):
+def build_images(client: docker.DockerClient, images: dict[str, tuple[str, str]]):
   build_threads = []
 
   try:
