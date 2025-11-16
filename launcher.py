@@ -39,14 +39,14 @@ def main():
   print('Building Docker images...')  
   build_images(client, images)
 
-  tree, path = generateComponentTree()
+  tree, path = generate_component_tree()
   print('Generated component tree:', json_format.MessageToJson(tree))
   
   print('Starting Helios container...')
-  StartHelios(path)
+  start_helios(path)
 
 
-def StartHelios(tree_path = None):
+def start_helios(tree_path = None):
   Helios = images["Helios"]
   HeliosContainer = None
 
@@ -120,7 +120,7 @@ def _build_image(client, path, tag):
   print(f"Image '{image.tags[0]}' built successfully in {round(time.time() - start, 2)}s.")
 
 
-def generateComponentTree():
+def generate_component_tree():
   # Example of generating a component tree using protobuf
   tree_location = "./component_tree.json"
 
