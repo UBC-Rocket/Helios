@@ -3,6 +3,7 @@ package client
 import (
 	"sync"
 
+	"helios/internal/commhandler"
 	"helios/internal/dockerhandler"
 )
 
@@ -15,7 +16,7 @@ const (
 type ComponentObject struct {
 	mu           sync.RWMutex
 	id           string // Docker ID
-	conn         dockerhandler.NewConnection
+	commHandler  commhandler.CommClient
 	recentPacket string //Placeholder for most recent packet
 }
 
@@ -92,21 +93,31 @@ func (x *DockerInterface) Close() {
 	x.dc.Close()
 }
 
+// Handles new connections made by Docker through an update channel.
+// If the component does not existing in the tree by name, a new one is made.
+// A new communications handler is spawned with the connection object and saved to the component.
 func (x *DockerInterface) handleNewConnection(conn chan dockerhandler.NewConnection) {
 	for {
 		c := <-conn
 
 		// Check if component exists in tree
-		_, ok := x.tree[c.Name]
+		comp, ok := x.tree[c.Name]
 
 		if ok {
-			x.tree[c.Name].conn = c
+			comp.mu.Lock()
+
+			// Check if an empty communications handler was initialized
+			if (commhandler.CommClient{}) == comp.commHandler {
+				comp.commHandler = *commhandler.NewCommClient(c.Conn)
+			} else {
+				comp.commHandler.Conn = c.Conn
+			}
+
+			comp.mu.Unlock()
 		} else {
 			x.tree[c.Name] = &ComponentObject{
-				conn: c,
+				commHandler: *commhandler.NewCommClient(c.Conn),
 			}
 		}
-
-		// Run function to start listening for messages
 	}
 }

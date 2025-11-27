@@ -10,7 +10,7 @@ const (
 )
 
 type CommClient struct {
-	ContainerID string
+	//ContainerID string
 	Conn        net.Conn
 	CoreOutChan chan []byte //Outgoing messages from handler to HeliosCore; Write
 	CoreInChan  chan []byte //Incoming messages from HeliosCore to handler; Read
@@ -19,10 +19,10 @@ type CommClient struct {
 }
 
 // Create a new communication client for a specific container
-func NewCommClient(containerID string, conn net.Conn) *CommClient {
+func NewCommClient(c net.Conn) *CommClient {
 	client := CommClient{
-		ContainerID: containerID,
-		Conn:        conn,
+		//ContainerID: containerID,
+		Conn:        c,
 		CoreOutChan: make(chan []byte, CHAN_BUFFER_SIZE),
 		CoreInChan:  make(chan []byte, CHAN_BUFFER_SIZE),
 		ContOutChan: make(chan []byte, CHAN_BUFFER_SIZE),

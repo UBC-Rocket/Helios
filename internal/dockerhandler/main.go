@@ -24,7 +24,6 @@ type DockerClient struct {
 	cli    *client.Client
 	ctx    context.Context
 	net    network.CreateResponse
-	images []ImageInfo
 }
 
 // Initialize the Docker client.
