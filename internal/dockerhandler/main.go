@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sync"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
@@ -22,7 +21,6 @@ type ImageInfo struct {
 }
 
 type DockerClient struct {
-	mu     sync.RWMutex
 	cli    *client.Client
 	ctx    context.Context
 	net    network.CreateResponse

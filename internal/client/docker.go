@@ -1,6 +1,8 @@
 package client
 
 import (
+	"sync"
+
 	"helios/internal/dockerhandler"
 )
 
@@ -10,16 +12,24 @@ const (
 	PORT      = "5000"
 )
 
-type DockerInterface struct {
-	dc *dockerhandler.DockerClient
-	runtime_hash string
-	tree string // placeholder for local tree object; includes connection object, cont. id, etc
+type ComponentObject struct {
+	mu           sync.RWMutex
+	id           string // Docker ID
+	conn         dockerhandler.NewConnection
+	recentPacket string //Placeholder for most recent packet
 }
 
-func initializeDockerClient(runtime_hash string) *DockerInterface {
+type DockerInterface struct {
+	dc          *dockerhandler.DockerClient
+	runtimeHash string
+	tree        map[string]*ComponentObject // placeholder for local tree object; includes connection object, cont. id, etc
+}
+
+func initializeDockerClient(hash string) *DockerInterface {
 	return &DockerInterface{
-		dc: &dockerhandler.DockerClient{},
-		runtime_hash: runtime_hash,
+		dc:          &dockerhandler.DockerClient{},
+		runtimeHash: hash,
+		tree:        make(map[string]*ComponentObject),
 	}
 }
 
@@ -35,7 +45,7 @@ func (x *DockerInterface) Initialize() {
 
 	connectionChan := make(chan dockerhandler.NewConnection)
 	go x.dc.StartPortConnection(PORT, connectionChan)
-	go handleNewConnection(images, connectionChan)
+	go x.handleNewConnection(connectionChan)
 
 	// Get own container's ID
 	self_id := x.dc.GetContainerID(SELF_NAME)
@@ -43,8 +53,7 @@ func (x *DockerInterface) Initialize() {
 		panic(SELF_NAME + "ID not found.")
 	}
 
-	// Add Helios to the network
-	//fmt.Println("Adding", SELF_NAME, "to", NET_NAME, "...")
+	// Add self to the network
 	x.dc.AddContainerToNetwork(self_id)
 }
 
@@ -64,13 +73,13 @@ func (x *DockerInterface) StartAllComponents() {
 }
 
 func (x *DockerInterface) StopComponent(name string) {
-  // Stop an individual component
+	// Stop an individual component
 	// docker stop
 	// Send a message over to component to get it to stop
 }
 
 func (x *DockerInterface) KillComponent(name string) {
-  // Kill? an individual component (Stop, remove)
+	// Kill? an individual component (Stop, remove)
 	// docker kill
 	// Force kill
 }
@@ -81,4 +90,23 @@ func (x *DockerInterface) Clean() {
 
 func (x *DockerInterface) Close() {
 	x.dc.Close()
+}
+
+func (x *DockerInterface) handleNewConnection(conn chan dockerhandler.NewConnection) {
+	for {
+		c := <-conn
+
+		// Check if component exists in tree
+		_, ok := x.tree[c.Name]
+
+		if ok {
+			x.tree[c.Name].conn = c
+		} else {
+			x.tree[c.Name] = &ComponentObject{
+				conn: c,
+			}
+		}
+
+		// Run function to start listening for messages
+	}
 }
