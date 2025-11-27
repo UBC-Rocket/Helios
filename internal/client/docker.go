@@ -3,6 +3,7 @@ package client
 import (
 	"sync"
 
+	"helios/generated/go/config"
 	"helios/internal/commhandler"
 	"helios/internal/dockerhandler"
 )
@@ -15,7 +16,11 @@ const (
 
 type ComponentObject struct {
 	mu           sync.RWMutex
-	id           string // Docker ID
+	containerID  string // Docker ID
+	componentID  string
+	group        string // Tree group
+	path         string
+	tag          string // TODO: Do we want to keep this?
 	commHandler  commhandler.CommClient
 	recentPacket string //Placeholder for most recent packet
 }
@@ -59,9 +64,10 @@ func (x *DockerInterface) Initialize() {
 }
 
 func (x *DockerInterface) InitializeComponentTree(path string) {
-	//tree := extractComponentTree(path)
-	return
-	// Read the JSON, generate a local object for component tree
+	tree := extractComponentTree(path)
+
+	// Recursively add children to tree
+	x.addTreeNodes(tree.Root, SELF_NAME)
 }
 
 func (x *DockerInterface) StartComponent(name string) {
@@ -91,6 +97,23 @@ func (x *DockerInterface) Clean() {
 
 func (x *DockerInterface) Close() {
 	x.dc.Close()
+}
+
+// Recursively checks all branches and adds children to the tree object
+func (x *DockerInterface) addTreeNodes(n *config.BaseComponent, g string) {
+	switch v := n.NodeType.(type) {
+	case *config.BaseComponent_Branch:
+		for _, c := range v.Branch.Children {
+			x.addTreeNodes(c, g + "_" + n.Name)
+		}
+	case *config.BaseComponent_Leaf:
+		x.tree[n.Name] = &ComponentObject{
+			group:       g,
+			path:        v.Leaf.Path,
+			tag:         v.Leaf.Tag,
+			componentID: v.Leaf.Id,
+		}
+	}
 }
 
 // Handles new connections made by Docker through an update channel.
