@@ -21,7 +21,6 @@ type ImageInfo struct {
 	Conn net.Conn
 }
 
-// TODO: Add component tree here?
 type DockerClient struct {
 	mu     sync.RWMutex
 	cli    *client.Client
@@ -31,16 +30,15 @@ type DockerClient struct {
 }
 
 // Initialize the Docker client.
-func Initialize() *DockerClient {
+func (c *DockerClient) Initialize() {
 	ctx := context.Background()
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
 		panic(err)
 	}
-	return &DockerClient{
-		cli: cli,
-		ctx: ctx,
-	}
+
+	c.cli = cli
+	c.ctx = ctx
 }
 
 // Close the Docker client.
