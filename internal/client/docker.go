@@ -1,6 +1,7 @@
 package client
 
 import (
+	"fmt"
 	"sync"
 
 	"helios/generated/go/config"
@@ -19,7 +20,7 @@ type ComponentObject struct {
 	containerID  string // Docker ID
 	componentID  string
 	group        string // Tree group
-	path         string
+	path         string // Path to component code, is this necessary?
 	tag          string // TODO: Do we want to keep this?
 	commHandler  commhandler.CommClient
 	recentPacket string //Placeholder for most recent packet
@@ -54,13 +55,13 @@ func (x *DockerInterface) Initialize() {
 	go x.handleNewConnection(connectionChan)
 
 	// Get own container's ID
-	self_id := x.dc.GetContainerID(SELF_NAME)
-	if self_id == "" {
+	selfId := x.dc.GetContainerID(SELF_NAME)
+	if selfId == "" {
 		panic(SELF_NAME + "ID not found.")
 	}
 
 	// Add self to the network
-	x.dc.AddContainerToNetwork(self_id)
+	x.dc.AddContainerToNetwork(selfId)
 }
 
 func (x *DockerInterface) InitializeComponentTree(path string) {
@@ -68,15 +69,32 @@ func (x *DockerInterface) InitializeComponentTree(path string) {
 
 	// Recursively add children to tree
 	x.addTreeNodes(tree.Root, SELF_NAME)
+
+	//! Temp: Print out component tree for debugging
+	fmt.Println("Initialized component tree:", x.tree)
+	for name, component := range x.tree {
+		fmt.Printf("Component Name: %s, Component ID: %s, Group: %s, Path: %s, Tag: %s\n", name, component.componentID, component.group, component.path, component.tag)
+	}
 }
 
 func (x *DockerInterface) StartComponent(name string) {
-	// Start an individual component
-	// Then add to network
+	c := x.tree[name]
+
+	// Start the container through docker handler and add to docker network
+	id := x.dc.StartContainer(name, c.tag, x.runtimeHash)
+	x.tree[name].containerID = id
 }
 
 func (x *DockerInterface) StartAllComponents() {
 	//Check if the component tree has been inititalized yet before running
+	if len(x.tree) == 0 {
+		return
+	}
+
+	// TODO: Do we want to wait for all components to have started before returning?
+	for name := range x.tree {
+		go x.StartComponent(name)
+	}
 }
 
 func (x *DockerInterface) StopComponent(name string) {
@@ -95,20 +113,21 @@ func (x *DockerInterface) Clean() {
 	// Clean component (s)?
 }
 
+// Close the docker client
 func (x *DockerInterface) Close() {
 	x.dc.Close()
 }
 
 // Recursively checks all branches and adds children to the tree object
-func (x *DockerInterface) addTreeNodes(n *config.BaseComponent, g string) {
-	switch v := n.NodeType.(type) {
+func (x *DockerInterface) addTreeNodes(node *config.BaseComponent, group string) {
+	switch v := node.NodeType.(type) {
 	case *config.BaseComponent_Branch:
 		for _, c := range v.Branch.Children {
-			x.addTreeNodes(c, g + "_" + n.Name)
+			x.addTreeNodes(c, group+"_"+node.Name)
 		}
 	case *config.BaseComponent_Leaf:
-		x.tree[n.Name] = &ComponentObject{
-			group:       g,
+		x.tree[node.Name] = &ComponentObject{
+			group:       group,
 			path:        v.Leaf.Path,
 			tag:         v.Leaf.Tag,
 			componentID: v.Leaf.Id,

@@ -14,9 +14,11 @@ os.environ["DOCKER_BUILDKIT"] = "1"
 
 LOCAL = os.path.dirname(sys.executable)
 
+
+# TODO: Change this to component tree stuffs?
 IMAGES = {
   "Helios": ('./', 'helios:latest'),
-  # "RocketDecoder": ('../RocketDecoder', 'rocketdecoder:latest'),
+  "RocketDecoder": ('./components/rocketdecoder/', 'rocketdecoder:v1.0.0'),
   # #"UI": ('../UI', 'ui:latest'),
   # "Livestream": ('../Livestream', 'livestream:latest')
 }
@@ -42,11 +44,17 @@ def main():
   tree, path = generate_component_tree()
   print('Generated component tree:', json_format.MessageToJson(tree))
 
+  # Mount the component tree into the Helios container
+  VOLUME_CONFIG[str(path.resolve())] = {
+    'bind': '/temp/' + str(path),
+    'mode': 'ro' # Read-only access
+  }
+
   print('Starting Helios container...')
-  start_helios(client, path)
+  start_helios(client, '/temp/' + str(path))
 
 
-def start_helios(client: docker.DockerClient, tree_path: Path | None = None):
+def start_helios(client: docker.DockerClient, tree_path: str | None = None):
   helios = IMAGES["Helios"]
   helios_container = None
 
@@ -127,18 +135,18 @@ def generate_component_tree() -> tuple[component.ComponentTree, Path]:
   tree_location = Path("./component_tree.json")
 
   leaf_component = component.BaseComponent()
-  leaf_component.name = "LeafComponent"
+  leaf_component.name = "RocketDecoder"
   leaf = component.Component()
-  leaf.path = "/path/to/leaf"
-  leaf.tag = "leaf_tag"
-  leaf.id = "leaf_1"
+  leaf.path = "/components/rocketdecoder"
+  leaf.tag = "rocketdecoder:v1.0.0"
+  leaf.id = "RD1"
   leaf_component.leaf.CopyFrom(leaf)
 
   branch_component = component.ComponentGroup()
   branch_component.children.extend([leaf_component])
 
   root = component.BaseComponent()
-  root.name = "RootComponent"
+  root.name = "FALCON"
   root.branch.CopyFrom(branch_component)
 
   component_tree = component.ComponentTree()

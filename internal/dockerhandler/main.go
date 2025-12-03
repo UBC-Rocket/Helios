@@ -3,7 +3,6 @@ package dockerhandler
 import (
 	"context"
 	"fmt"
-	"net"
 	"os"
 
 	"github.com/docker/docker/api/types/container"
@@ -12,18 +11,10 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 )
 
-type ImageInfo struct {
-	Name string
-	Path string
-	Tag  string
-	ID   string
-	Conn net.Conn
-}
-
 type DockerClient struct {
-	cli    *client.Client
-	ctx    context.Context
-	net    network.CreateResponse
+	cli *client.Client
+	ctx context.Context
+	net network.CreateResponse
 }
 
 // Initialize the Docker client.
@@ -70,96 +61,79 @@ func (c *DockerClient) GetContainers() (summary []container.Summary) {
 
 // Create a container using information from the image struct and runtime_hash.
 // It should be checked if a container already exists with the same name and hash before calling this function.
-func (c *DockerClient) CreateContainer(img ImageInfo, runtime_hash string) (response container.CreateResponse, error error) {
-	fmt.Println("Pulling " + img.Tag + " image...")
+func (c *DockerClient) createContainer(name string, tag string, hash string) (response container.CreateResponse, error error) {
 
 	// Create container
 	resp, err := c.cli.ContainerCreate(c.ctx,
 		&container.Config{
-			Image: img.Tag,
+			Image: tag,
 			Labels: map[string]string{
-				"runtime_hash": runtime_hash,
+				"runtime_hash": hash,
 			},
 		},
-		nil, nil, nil, img.Name)
+		nil, nil, nil, name)
 	if err != nil {
 		return resp, err
 	}
 	return resp, nil
 }
 
-// Start all containers passed in the images array.
-// This function will update the array with the container ID once started
-func (c *DockerClient) StartAllContainers(images *[]ImageInfo, runtime_hash string, HeliosNet network.CreateResponse) {
+// Start a container given its name, tag, and runtime_hash.
+// If the container already exists, it will be restarted or removed and recreated if the hash does not match.
+// Returns the container ID of the started container.
+// Created container will be added to the docker network and started.
+func (c *DockerClient) StartContainer(name string, tag string, hash string) (ID string) {
 	list := c.GetContainers()
+	var cont container.Summary = container.Summary{}
 
-	for _, img := range *images {
-		fmt.Println("Checking " + img.Name + " container...")
-		var contID string = ""
-
-		for _, x := range list {
-			if x.Names[0] == "/"+img.Name {
-				existing_hash := x.Labels["runtime_hash"]
-				if existing_hash == runtime_hash {
-
-					if x.State == "running" {
-						fmt.Println("\n" + img.Name + " container is already running and up-to-date.\n")
-						contID = x.ID
-						break
-					} else if x.State == "exited" {
-						fmt.Println("\n" + img.Name + " container is exited but up-to-date. Restarting it...\n")
-						if err := c.cli.ContainerStart(c.ctx, x.ID, container.StartOptions{}); err != nil {
-							panic(err)
-						}
-						// Wait until it finishes
-						statusCh, errCh := c.cli.ContainerWait(c.ctx, x.ID, container.WaitConditionNotRunning)
-						select {
-						case err := <-errCh:
-							if err != nil {
-								panic(err)
-							}
-						case <-statusCh:
-						}
-
-						contID = x.ID
-						break
-					}
-				} else {
-					// Remove the container
-					fmt.Println(img.Name + " container is outdated. Removing it...")
-					if err := c.cli.ContainerRemove(c.ctx, x.ID, container.RemoveOptions{Force: true}); err != nil {
-						panic(err)
-					}
-				}
-			}
+	// Find container by name to see if it exists
+	for _, x := range list {
+		if x.Names[0] == "/"+name {
+			cont = x
+			break
 		}
-
-		if contID == "" {
-			fmt.Println("No existing container found. Creating a new one...")
-			contResp, contErr := c.CreateContainer(img, runtime_hash)
-			if contErr != nil {
-				panic(contErr)
-			}
-			contID = contResp.ID
-		}
-
-		fmt.Println("Container ID: " + contID)
-
-		// Save the container ID
-		img.ID = contID
-
-		//Add each container to the network before starting them
-		fmt.Println("Adding " + img.Name + " container to network...")
-		go c.AddContainerToNetwork(contID)
-		go c.StartContainer(contID)
 	}
+
+	// If the runtime hash does not match
+	if (cont.ID != "") && (cont.Labels["runtime_hash"] != hash) {
+		// Remove the container
+		if err := c.cli.ContainerRemove(c.ctx, cont.ID, container.RemoveOptions{Force: true}); err != nil {
+			fmt.Println("Error removing outdated container:", err)
+		}
+
+		// Reset cont to indicate it does not exist
+		cont = container.Summary{}
+
+		// If the runtime hash matches, check if is exited or running
+	} else if cont.ID != "" {
+		if cont.State == "running" {
+			// Do nothing
+		} else if cont.State == "exited" {
+			// Restart it
+			c.startDockerContainer(cont.ID)
+		}
+	}
+
+	// If container does not exist, create it
+	if cont.ID == "" {
+		contResp, contErr := c.createContainer(name, tag, hash)
+		if contErr != nil {
+			// TODO: Handle error properly
+			fmt.Println("Error creating container:", contErr)
+		}
+		cont.ID = contResp.ID
+	}
+
+	// Add to network and start container
+	go c.AddContainerToNetwork(cont.ID)
+	go c.startDockerContainer(cont.ID)
+	return cont.ID
 }
 
 // Start a docker container by ID.
-func (c *DockerClient) StartContainer(ID string) {
+func (c *DockerClient) startDockerContainer(ID string) {
 
 	// Start container
-	//fmt.Printf("Starting a new %s container...\n", img.Name)
 	if err := c.cli.ContainerStart(c.ctx, ID, container.StartOptions{}); err != nil {
 		panic(err)
 	}
