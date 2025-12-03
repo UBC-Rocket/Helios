@@ -22,7 +22,7 @@ type ComponentObject struct {
 	group        string // Tree group
 	path         string // Path to component code, is this necessary?
 	tag          string // TODO: Do we want to keep this?
-	commHandler  commhandler.CommClient
+	commHandler  *commhandler.CommClient
 	recentPacket string //Placeholder for most recent packet
 }
 
@@ -30,6 +30,7 @@ type DockerInterface struct {
 	dc          *dockerhandler.DockerClient
 	runtimeHash string
 	tree        map[string]*ComponentObject // placeholder for local tree object; includes connection object, cont. id, etc
+	treeMu      sync.RWMutex                // protects the map itself
 }
 
 func initializeDockerClient(hash string) *DockerInterface {
@@ -78,21 +79,39 @@ func (x *DockerInterface) InitializeComponentTree(path string) {
 }
 
 func (x *DockerInterface) StartComponent(name string) {
+	x.treeMu.RLock()
 	c := x.tree[name]
+	x.treeMu.RUnlock()
 
-	// Start the container through docker handler and add to docker network
-	id := x.dc.StartContainer(name, c.tag, x.runtimeHash)
-	x.tree[name].containerID = id
-}
-
-func (x *DockerInterface) StartAllComponents() {
-	//Check if the component tree has been inititalized yet before running
-	if len(x.tree) == 0 {
+	if c == nil {
 		return
 	}
 
-	// TODO: Do we want to wait for all components to have started before returning?
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	// Start the container through docker handler and add to docker network
+	id := x.dc.StartContainer(name, c.tag, x.runtimeHash)
+	c.containerID = id
+}
+
+func (x *DockerInterface) StartAllComponents() {
+	x.treeMu.RLock()
+
+	//Check if the component tree has been inititalized yet before running
+	if len(x.tree) == 0 {
+		x.treeMu.RUnlock()
+		return
+	}
+
+	names := make([]string, 0, len(x.tree))
 	for name := range x.tree {
+		names = append(names, name)
+	}
+	x.treeMu.RUnlock()
+
+	// TODO: Do we want to wait for all components to have started before returning?
+	for _, name := range names {
 		go x.StartComponent(name)
 	}
 }
@@ -126,12 +145,16 @@ func (x *DockerInterface) addTreeNodes(node *config.BaseComponent, group string)
 			x.addTreeNodes(c, group+"_"+node.Name)
 		}
 	case *config.BaseComponent_Leaf:
-		x.tree[node.Name] = &ComponentObject{
+		obj := &ComponentObject{
 			group:       group,
 			path:        v.Leaf.Path,
 			tag:         v.Leaf.Tag,
 			componentID: v.Leaf.Id,
 		}
+
+		x.treeMu.Lock()
+		x.tree[node.Name] = obj
+		x.treeMu.Unlock()
 	}
 }
 
@@ -143,22 +166,36 @@ func (x *DockerInterface) handleNewConnection(conn chan dockerhandler.NewConnect
 		c := <-conn
 
 		// Check if component exists in tree
+		x.treeMu.RLock()
 		comp, ok := x.tree[c.Name]
+		x.treeMu.RUnlock()
 
 		if ok {
 			comp.mu.Lock()
 
 			// Check if an empty communications handler was initialized
-			if (commhandler.CommClient{}) == comp.commHandler {
-				comp.commHandler = *commhandler.NewCommClient(c.Conn)
+			if comp.commHandler == nil {
+				comp.commHandler = commhandler.NewCommClient(c.Conn)
 			} else {
 				comp.commHandler.Conn = c.Conn
 			}
 
 			comp.mu.Unlock()
 		} else {
-			x.tree[c.Name] = &ComponentObject{
-				commHandler: *commhandler.NewCommClient(c.Conn),
+			// Need to add the new component safely
+			x.treeMu.Lock()
+			// re-check in case another goroutine added it
+			comp, ok = x.tree[c.Name]
+			if !ok {
+				x.tree[c.Name] = &ComponentObject{
+					commHandler: commhandler.NewCommClient(c.Conn),
+				}
+				x.treeMu.Unlock()
+			} else {
+				x.treeMu.Unlock()
+				comp.mu.Lock()
+				comp.commHandler = commhandler.NewCommClient(c.Conn)
+				comp.mu.Unlock()
 			}
 		}
 	}
