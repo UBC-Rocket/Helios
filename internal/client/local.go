@@ -5,12 +5,12 @@ import (
 )
 
 type LocalInterface struct {
-	runtime_hash string
+	runtimeHash string
 }
 
-func initializeLocalClient(runtime_hash string) *LocalInterface {
+func initializeLocalClient(hash string) *LocalInterface {
 	return &LocalInterface{
-		runtime_hash: runtime_hash,
+		runtimeHash: hash,
 	}
 }
 

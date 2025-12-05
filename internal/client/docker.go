@@ -35,7 +35,7 @@ type DockerInterface struct {
 
 func initializeDockerClient(hash string) *DockerInterface {
 	return &DockerInterface{
-		dc:          &dockerhandler.DockerClient{},
+		dc:          nil,
 		runtimeHash: hash,
 		tree:        make(map[string]*ComponentObject),
 	}

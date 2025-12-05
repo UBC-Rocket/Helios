@@ -1,4 +1,4 @@
-.PHONY: build deps run clean proto
+.PHONY: build deps run clean proto test
 
 # Variables
 BINARY_NAME=helios
@@ -42,6 +42,9 @@ proto:
 	$(foreach f, $(PROTO_LANGS), \
 		$(call build_proto,$(f)) \
 	)
+
+test:
+	go test ./... -v
 
 define build_proto
 
