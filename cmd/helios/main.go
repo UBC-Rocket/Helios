@@ -14,8 +14,6 @@ func main() {
 	docker_disabled := os.Getenv("DOCKER_DISABLED")
 	component_tree_path := os.Getenv("COMPONENT_TREE_PATH")
 
-	wg.Add(1)
-
 	runType := "docker"
 	if docker_disabled == "1" { runType = "local" }
 
@@ -23,7 +21,8 @@ func main() {
 	defer cli.Close()
 
 	cli.InitializeComponentTree(component_tree_path)
-	cli.StartAllComponents()
+	go cli.StartAllComponents()
+	wg.Add(1)
 
 	// Stop the main program from terminating
 	// All code is now running in goroutines
