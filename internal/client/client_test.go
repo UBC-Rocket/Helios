@@ -4,6 +4,9 @@ import (
 	"math/rand"
 	"strconv"
 	"testing"
+
+  "gotest.tools/assert"
+	is "gotest.tools/assert/cmp"
 )
 
 func TestInitializeLocalClient(t *testing.T) {
@@ -12,9 +15,7 @@ func TestInitializeLocalClient(t *testing.T) {
 
 	cli := initializeLocalClient(hash)
 
-	if cli.runtimeHash != hash {
-		t.Errorf("Expected runtime_hash to be %s, got %s", hash, cli.runtimeHash)
-	}
+	assert.Equal(t, cli.runtimeHash, hash)
 }
 
 func TestInitializeDockerClient(t *testing.T) {
@@ -23,40 +24,20 @@ func TestInitializeDockerClient(t *testing.T) {
 
 	cli := initializeDockerClient(hash)
 
-	if cli.runtimeHash != hash {
-		t.Errorf("Expected runtimeHash to be %s, got %s", hash, cli.runtimeHash)
-	}
-
-	if cli.dc != nil {
-		t.Error("Expected Docker client to be nil before initialization")
-	}
-
-	if cli.tree == nil {
-		t.Error("Expected tree map to be initialized, got nil")
-	}
+	assert.Equal(t, cli.runtimeHash, hash)
+	assert.Assert(t, cli.tree != nil)
+	assert.Assert(t, is.Nil(cli.dc))
 }
 
-// func TestDockerInitialization(t *testing.T) {
-// 	// Generate a random hash for testing
-// 	hash := strconv.Itoa(rand.Int())
+func TestDockerInitialization(t *testing.T) {
+	// Generate a random hash for testing
+	hash := strconv.Itoa(rand.Int())
 
-// 	cli := initializeDockerClient(hash)
-// 	cli.Initialize()
+	cli := initializeDockerClient(hash)
+	cli.Initialize()
 
-// 	// Check if Docker client is initialized
-// 	if cli.dc == nil {
-// 		t.Error("Expected Docker client to be initialized, got nil")
-// 	}
-
-// 	if cli.dc.GetContext() == nil {
-// 		t.Error("Expected Docker client context to be initialized, got nil")
-// 	}
-
-// 	if cli.dc.GetDockerClient() == nil {
-// 		t.Error("Expected Docker client instance to be initialized, got nil")
-// 	}
-
-// 	if cli.dc.GetNetwork().ID == "" {
-// 		t.Error("Expected Docker network to be initialized, got empty ID")
-// 	}
-// }
+	assert.Assert(t, cli.dc != nil)
+	//assert.Assert(t, is.Nil(cli.dc.GetContext()))
+	assert.Assert(t, cli.dc.GetDockerClient() != nil)
+	assert.Assert(t, cli.dc.GetNetwork().ID != "")
+}
