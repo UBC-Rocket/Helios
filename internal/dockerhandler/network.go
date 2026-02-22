@@ -18,7 +18,7 @@ type NewConnection struct {
 // If it already exists, it finds and returns the ID of the existing network.
 // Network will be saved into the client object.
 // Returns the network and any errors
-func (c *Client) StartDockerNetwork(networkName string) (resp network.CreateResponse, errResp error) {
+func (c *DockerClient) StartDockerNetwork(networkName string) (resp network.CreateResponse, errResp error) {
 	list, netErr := c.cli.NetworkList(c.ctx, network.ListOptions{})
 	if netErr != nil {
 		panic(netErr)
@@ -47,7 +47,7 @@ func (c *Client) StartDockerNetwork(networkName string) (resp network.CreateResp
 }
 
 // Add a container to the specified Docker Network
-func (c *Client) AddContainerToNetwork(containerID string) {
+func (c *DockerClient) AddContainerToNetwork(containerID string) {
 	err := c.cli.NetworkConnect(c.ctx, c.net.ID, containerID, nil)
 	if err != nil {
 		panic(err)
@@ -56,7 +56,7 @@ func (c *Client) AddContainerToNetwork(containerID string) {
 }
 
 // Get a container's name and ID from it's local IP address
-func (c *Client) GetContainerInfoFromIP(ip string) (name string, id string) {
+func (c *DockerClient) GetContainerInfoFromIP(ip string) (name string, id string) {
 	list := c.GetContainers()
 	x := strings.Split(ip, ":")
 
@@ -72,7 +72,7 @@ func (c *Client) GetContainerInfoFromIP(ip string) (name string, id string) {
 
 // Start listening to a new port connection to the specified port.
 // New network connections will be send to the out channel.
-func (c *Client) StartPortConnection(port string, out chan NewConnection) {
+func (c *DockerClient) StartPortConnection(port string, out chan NewConnection) {
 	listener, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		fmt.Printf("Failed to listen: %v\n", err)

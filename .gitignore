@@ -2,6 +2,7 @@ bin/
 __pycache__/
 .venv/
 generated/
+.vscode/
 
 .python-version
 component_tree.json
