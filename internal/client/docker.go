@@ -23,7 +23,6 @@ type ComponentObject struct {
 	path         string // Path to component code, is this necessary?
 	tag          string // TODO: Do we want to keep this?
 	commHandler  *commhandler.CommClient
-	recentPacket string //Placeholder for most recent packet
 }
 
 type DockerInterface struct {
@@ -43,6 +42,7 @@ func initializeDockerClient(hash string) *DockerInterface {
 
 func (x *DockerInterface) Initialize() {
 	// Create a new docker client
+	x.dc = &dockerhandler.DockerClient{}
 	x.dc.Initialize()
 
 	// Start the docker network
@@ -87,12 +87,12 @@ func (x *DockerInterface) StartComponent(name string) {
 		return
 	}
 
-	c.mu.Lock()
-	defer c.mu.Unlock()
-
 	// Start the container through docker handler and add to docker network
 	id := x.dc.StartContainer(name, c.tag, x.runtimeHash)
+		
+	c.mu.Lock()
 	c.containerID = id
+  c.mu.Unlock()
 }
 
 func (x *DockerInterface) StartAllComponents() {
@@ -142,7 +142,7 @@ func (x *DockerInterface) addTreeNodes(node *config.BaseComponent, group string)
 	switch v := node.NodeType.(type) {
 	case *config.BaseComponent_Branch:
 		for _, c := range v.Branch.Children {
-			x.addTreeNodes(c, group+"_"+node.Name)
+			x.addTreeNodes(c, group+"."+node.Name)
 		}
 	case *config.BaseComponent_Leaf:
 		obj := &ComponentObject{
@@ -177,7 +177,7 @@ func (x *DockerInterface) handleNewConnection(conn chan dockerhandler.NewConnect
 			if comp.commHandler == nil {
 				comp.commHandler = commhandler.NewCommClient(c.Conn)
 			} else {
-				comp.commHandler.Conn = c.Conn
+				comp.commHandler.SetConn(c.Conn)
 			}
 
 			comp.mu.Unlock()

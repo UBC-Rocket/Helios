@@ -11,22 +11,23 @@ const (
 
 type CommClient struct {
 	//ContainerID string
-	Conn        net.Conn
-	CoreOutChan chan []byte //Outgoing messages from handler to HeliosCore; Write
-	CoreInChan  chan []byte //Incoming messages from HeliosCore to handler; Read
-	ContOutChan chan []byte //Outgoing messages from handler to container;  Write //TODO: Is this necessary, or can we just write to port?
-	ContInChan  chan []byte //Incoming messages from container to handler;  Read
+	conn        net.Conn
+	coreOutChan chan []byte //Outgoing messages from handler to HeliosCore; Write
+	coreInChan  chan []byte //Incoming messages from HeliosCore to handler; Read
+	contOutChan chan []byte //Outgoing messages from handler to container;  Write //TODO: Is this necessary, or can we just write to port?
+	contInChan  chan []byte //Incoming messages from container to handler;  Read
+	recentPacket string		 //Placeholder for most recent packet
 }
 
 // Create a new communication client for a specific container
 func NewCommClient(c net.Conn) *CommClient {
 	client := CommClient{
 		//ContainerID: containerID,
-		Conn:        c,
-		CoreOutChan: make(chan []byte, CHAN_BUFFER_SIZE),
-		CoreInChan:  make(chan []byte, CHAN_BUFFER_SIZE),
-		ContOutChan: make(chan []byte, CHAN_BUFFER_SIZE),
-		ContInChan:  make(chan []byte, CHAN_BUFFER_SIZE),
+		conn:        c,
+		coreOutChan: make(chan []byte, CHAN_BUFFER_SIZE),
+		coreInChan:  make(chan []byte, CHAN_BUFFER_SIZE),
+		contOutChan: make(chan []byte, CHAN_BUFFER_SIZE),
+		contInChan:  make(chan []byte, CHAN_BUFFER_SIZE),
 	}
 
 	go client._listenForContainerMessages()
@@ -40,24 +41,24 @@ func (c *CommClient) _listenForContainerMessages() {
 	tmp := make([]byte, PORT_READ_BUFFER_SIZE)
 
 	for {
-		n, _ := c.Conn.Read(tmp)
+		n, _ := c.conn.Read(tmp)
 
 		if n > 0 {
-			c.ContInChan <- tmp[:n]
+			c.contInChan <- tmp[:n]
 		}
 	}
 }
 
 func (c *CommClient) _handleMessages() {
 	select {
-	case msg := <-c.CoreInChan:
+	case msg := <-c.coreInChan:
 		// Process any incoming stuff from HeliosCore here
-		c.Conn.Write(msg)
-	case msg := <-c.ContInChan:
-		c.CoreOutChan <- msg // If we want to send it to Core
+		c.conn.Write(msg)
+	case msg := <-c.contInChan:
+		c.coreOutChan <- msg // If we want to send it to Core
 		go c._broadcast(msg)
-	case msg := <-c.ContOutChan:
-		c.Conn.Write(msg)
+	case msg := <-c.contOutChan:
+		c.conn.Write(msg)
 	}
 }
 
