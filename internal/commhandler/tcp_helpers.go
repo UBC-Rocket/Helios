@@ -7,7 +7,7 @@ import (
 )
 
 // SendMessage sends a length-prefixed message over a TCP connection.
-// Wire format: [ 2-byte big-endian length ][ payload bytes ]
+// Wire format: [ 4-byte big-endian length ][ payload bytes ]
 func (c *CommClient) SendMessage(data []byte) error {
 	if len(data) > PORT_READ_BUFFER_SIZE {
 		return fmt.Errorf("message size %d exceeds 4-byte header limit of %d", len(data), PORT_READ_BUFFER_SIZE)

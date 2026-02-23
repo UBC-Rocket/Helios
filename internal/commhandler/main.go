@@ -64,14 +64,14 @@ func (c *CommClient) _listenForContainerMessages() {
 func (c *CommClient) _handleMessages() {
 	for {
 		select {
-		case msg := <-c.coreInChan:
+		case msg := <-c.GetCoreInChan():
 			// Process any incoming stuff from HeliosCore here
 			if err := c.SendMessage(msg); err != nil {
 				fmt.Printf("Error sending to container %s: %v\n", c.conn.RemoteAddr(), err)
 				return
 			}
-		case msg := <-c.contInChan:
-			c.coreOutChan <- msg // If we want to send it to Core
+		case msg := <-c.GetContInChan():
+			c.GetCoreOutChan() <- msg // If we want to send it to Core
 
 			packet, _ := UnmarshalTransportPacket(msg)
 			c.recentPacket = packet
