@@ -89,12 +89,15 @@ func (c *DockerClient) StartPortConnection(port string, out chan NewConnection) 
 			continue
 		}
 
-		name, id := c.GetContainerInfoFromIP(conn.RemoteAddr().String())
+		go func(conn net.Conn) {
+			name, id := c.GetContainerInfoFromIP(conn.RemoteAddr().String())
+			fmt.Printf("New connection from container '%s' (%s)\n", name, id)
 
-		out <- NewConnection{
-			Name: name,
-			ID:   id,
-			Conn: conn,
-		}
+			out <- NewConnection{
+				Name: name,
+				ID:   id,
+				Conn: conn,
+			}
+		}(conn)
 	}
 }
