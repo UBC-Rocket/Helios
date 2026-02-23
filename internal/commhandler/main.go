@@ -1,12 +1,17 @@
 package commhandler
 
 import (
+	"fmt"
+	"io"
 	"net"
+
+	packet "helios/generated/go/transport"
 )
 
 const (
-	CHAN_BUFFER_SIZE      = 16384 //16 KB
-	PORT_READ_BUFFER_SIZE = 4096  //4 KB
+	CHAN_BUFFER_SIZE      = 1 << 8   // Number of messages buffered in each channel
+	PORT_READ_BUFFER_SIZE = 1 << 30  // Max message size (4-byte header limit is 4GB, limit to 1GB)
+	LENGTH_HEADER_SIZE    = 4        // 4-byte header for length
 )
 
 type CommClient struct {
@@ -14,9 +19,8 @@ type CommClient struct {
 	conn        net.Conn
 	coreOutChan chan []byte //Outgoing messages from handler to HeliosCore; Write
 	coreInChan  chan []byte //Incoming messages from HeliosCore to handler; Read
-	contOutChan chan []byte //Outgoing messages from handler to container;  Write //TODO: Is this necessary, or can we just write to port?
 	contInChan  chan []byte //Incoming messages from container to handler;  Read
-	recentPacket string		 //Placeholder for most recent packet
+	recentPacket *packet.TransportPacket     //Placeholder for most recent packet
 }
 
 // Create a new communication client for a specific container
@@ -26,7 +30,6 @@ func NewCommClient(c net.Conn) *CommClient {
 		conn:        c,
 		coreOutChan: make(chan []byte, CHAN_BUFFER_SIZE),
 		coreInChan:  make(chan []byte, CHAN_BUFFER_SIZE),
-		contOutChan: make(chan []byte, CHAN_BUFFER_SIZE),
 		contInChan:  make(chan []byte, CHAN_BUFFER_SIZE),
 	}
 
@@ -36,32 +39,59 @@ func NewCommClient(c net.Conn) *CommClient {
 	return &client
 }
 
-// Listen for incoming container messages and output to ContInChan
+// Listen for incoming container messages and output to contInChan.
+// Uses RecvMessage to read length-prefixed frames.
 func (c *CommClient) _listenForContainerMessages() {
-	tmp := make([]byte, PORT_READ_BUFFER_SIZE)
-
 	for {
-		n, _ := c.conn.Read(tmp)
+		msg, err := c.RecvMessage()
+		if err != nil {
+			if err == io.EOF {
+				fmt.Printf("Container disconnected: %s\n", c.conn.RemoteAddr())
+			} else {
+				fmt.Printf("Error reading from container %s: %v\n", c.conn.RemoteAddr(), err)
+			}
+			return
+		}
 
-		if n > 0 {
-			c.contInChan <- tmp[:n]
+		if len(msg) > 0 {
+			c.contInChan <- msg
 		}
 	}
 }
 
+// Handle messages from all channels in a continuous loop.
+// Uses SendMessage to write length-prefixed frames.
 func (c *CommClient) _handleMessages() {
-	select {
-	case msg := <-c.coreInChan:
-		// Process any incoming stuff from HeliosCore here
-		c.conn.Write(msg)
-	case msg := <-c.contInChan:
-		c.coreOutChan <- msg // If we want to send it to Core
-		go c._broadcast(msg)
-	case msg := <-c.contOutChan:
-		c.conn.Write(msg)
+	for {
+		select {
+		case msg := <-c.coreInChan:
+			// Process any incoming stuff from HeliosCore here
+			if err := c.SendMessage(msg); err != nil {
+				fmt.Printf("Error sending to container %s: %v\n", c.conn.RemoteAddr(), err)
+				return
+			}
+		case msg := <-c.contInChan:
+			c.coreOutChan <- msg // If we want to send it to Core
+
+			packet, _ := UnmarshalTransportPacket(msg)
+			c.recentPacket = packet
+
+			fmt.Printf("Message received — id: %d, address: %s, data: %s, timestamp: %s\n",
+					packet.Id,
+					packet.Address,
+					packet.Data,
+					packet.Timestamp.AsTime(),
+			)
+
+			//go c._broadcast(msg)
+			if err := c.SendMessage(msg); err != nil {
+				fmt.Printf("Error sending to container %s: %v\n", c.conn.RemoteAddr(), err)
+				return
+			}
+		}
 	}
 }
 
 func (c *CommClient) _broadcast(msg []byte) {
-
+	//TODO: Potentially move broadcast functionality to the core Helios
 }
