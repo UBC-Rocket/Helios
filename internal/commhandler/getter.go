@@ -2,6 +2,8 @@ package commhandler
 
 import (
 	"net"
+	
+	packet "helios/generated/go/transport"
 )
 
 func (c *CommClient) GetConn() net.Conn {
@@ -12,7 +14,7 @@ func (c *CommClient) SetConn(conn net.Conn) {
 	c.conn = conn
 }
 
-func (c *CommClient) GetRecentPacket() string {
+func (c *CommClient) GetRecentPacket() *packet.TransportPacket {
 	return c.recentPacket
 }
 
@@ -22,10 +24,6 @@ func (c *CommClient) GetCoreOutChan() chan []byte {
 
 func (c *CommClient) GetCoreInChan() chan []byte {
 	return c.coreInChan
-}
-
-func (c *CommClient) GetContOutChan() chan []byte {
-	return c.contOutChan
 }
 
 func (c *CommClient) GetContInChan() chan []byte {

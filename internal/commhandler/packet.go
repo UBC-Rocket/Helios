@@ -22,3 +22,11 @@ func MarshalTransportPacket(pkt *packet.TransportPacket) ([]byte, error) {
 	}
 	return data, nil
 }
+
+func UnmarshalTransportPacket(data []byte) (*packet.TransportPacket, error) {
+    pkt := &packet.TransportPacket{}
+    if err := proto.Unmarshal(data, pkt); err != nil {
+        return nil, err
+    }
+    return pkt, nil
+}

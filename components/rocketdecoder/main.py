@@ -1,42 +1,27 @@
-import socket
 import time
-
-HOST = 'Helios' #TODO: Get this host name and port from initial env variables
-PORT = 5000
-
-connected = False
-stream = None
+import sdk_python.src.helios_sdk_python as helios
+from generated.python.transport.packet_pb2 import TransportPacket
+from google.protobuf.timestamp_pb2 import Timestamp
 
 print("Hello from rocketdecoder container!")
 
-with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-  while not connected:
-    try:
-      s.connect((HOST, PORT))
-      stream = s
-      connected = True
-      #s.sendall(b"Hello from client")
-      data = s.recv(1024)
+with helios.HeliosClient(retry=999, retry_delay=5.0) as client:
+    print("Connected to Helios!")
 
-      print(f"rocketdecoder - Received from server: {data.decode()}")
-    except ConnectionRefusedError:
-        print(f"Connection refused. Retrying in 5 seconds...")
+    packet = TransportPacket(
+        id=1,
+        timestamp=Timestamp(seconds=int(time.time())),
+        address="rocketdecoder",
+        data=b"my raw payload bytes",
+    )
+    reply = client.send_recv(packet, TransportPacket)
+    print(f"rocketdecoder - Received from server: {reply.data}")
+
+    while True:
+        msg = client.recv(TransportPacket)
+        if msg is None:
+            print("Connection closed by peer.")
+            break
+
+        print(f"rocketdecoder - Received: {msg.data}")
         time.sleep(5)
-    except socket.gaierror:
-        print(f"Hostname resolution failed. Retrying in 5 seconds...")
-        time.sleep(5)
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}. Retrying in 5 seconds...")
-        time.sleep(5)
-
-  if connected:
-    s.sendall(b"Hello from rocketdecoder through port!~")
-
-    while True: 
-      data = s.recv(1024)
-      if data:
-        print(f"rocketdecoder - Received: {data.decode('utf-8')}")
-      else:
-        print("Connection closed by peer.")
-
-      time.sleep(5)
