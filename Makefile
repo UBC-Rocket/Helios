@@ -4,7 +4,7 @@
 BINARY_NAME=helios
 BUILD_DIR=bin
 MAIN_PATH=./cmd/helios
-PROTO_SOURCE_DIR=proto
+PROTO_SOURCE_DIR=helios-protos
 PROTO_LANGS=go python
 PROTO_BUILD_DIR=generated
 
