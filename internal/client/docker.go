@@ -30,6 +30,8 @@ type DockerInterface struct {
 	runtimeHash string
 	tree        map[string]*ComponentObject // placeholder for local tree object; includes connection object, cont. id, etc
 	treeMu      sync.RWMutex                // protects the map itself
+	broadcast   map[string]map[string] chan []byte    // map of component name to broadcast channel for sending messages to all instances of a component
+	broadcastMu sync.RWMutex                // protects the broadcast map
 }
 
 func initializeDockerClient(hash string) *DockerInterface {
@@ -37,6 +39,7 @@ func initializeDockerClient(hash string) *DockerInterface {
 		dc:          nil,
 		runtimeHash: hash,
 		tree:        make(map[string]*ComponentObject),
+		broadcast:   make(map[string]map[string]chan []byte),
 	}
 }
 
