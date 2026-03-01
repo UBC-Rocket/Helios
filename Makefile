@@ -4,8 +4,7 @@
 BINARY_NAME=helios
 BUILD_DIR=bin
 MAIN_PATH=./cmd/helios
-PROTO_SOURCE_DIR=proto
-PROTO_LANGS=go python
+PROTO_SOURCE_DIR=helios-protos
 PROTO_BUILD_DIR=generated
 
 # Find all .proto files in the proto directory and subdirectories
@@ -39,17 +38,7 @@ clean:
 proto:
 	$(call MKDIR,$(PROTO_BUILD_DIR))
 
-	$(foreach f, $(PROTO_LANGS), \
-		$(call build_proto,$(f)) \
-	)
+	protoc -I=$(PROTO_SOURCE_DIR) --go_out=$(PROTO_BUILD_DIR) $(PROTO_SRC)
 
 test:
 	go test ./... -v
-
-define build_proto
-
-	@echo "Generating protobuf files for language: $(1)"
-	$(call MKDIR,$(PROTO_BUILD_DIR)/$(1))
-	protoc -I=$(PROTO_SOURCE_DIR) --$(1)_out=$(PROTO_BUILD_DIR)/$(1) $(PROTO_SRC)
-
-endef
