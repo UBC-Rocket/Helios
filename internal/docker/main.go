@@ -19,20 +19,6 @@ type DockerClient struct {
 	net network.CreateResponse
 }
 
-// TODO: Remove this and use the protobuf definition
-// type ComponentObject struct {
-// 	Mu           sync.RWMutex
-// 	ContainerID  string // Docker ID
-// 	ComponentID  string
-// 	Group        string // Tree group
-// 	Path         string // Path to component code, is this necessary?
-// 	Tag          string // TODO: Do we want to keep this?
-// 	Volumes      []*config.Volume // List of volume mappings for the component
-// 	Ports        []*config.Port // List of port mappings for the component
-// 	CommHandler  *transport.CommClient
-// 	SkipSpawn		 bool // Flag to indicate whether to skip spawning this component
-// }
-
 /*
  * ========================================================
  * = Public methods for managing Docker runtime
@@ -155,8 +141,12 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 	comp.SetDockerConnID(cont.ID)
 
 	// Add to network and start container
-	go c.AddContainerToNetwork(cont.ID) //TODO: Check if this shoud be here
-	go c.startDockerContainer(cont.ID)
+	if err := c.AddContainerToNetwork(cont.ID); err != nil {
+		return err
+	}
+	if err := c.startDockerContainer(cont.ID); err != nil {
+		return err
+	}
 	return nil
 }
 

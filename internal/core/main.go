@@ -80,6 +80,9 @@ func (c *Core) InitializeDockerRuntime(socketPath string) error {
 	if err := c.dockerClient.Initialize(); err != nil {
 		return err
 	}
+	if err := c.dockerClient.InitializeNetwork("HeliosNet"); err != nil {
+		return err
+	}
 	if err := c.dockerClient.StartConfigured(c.tree); err != nil {
 		return err
 	}

@@ -2,7 +2,6 @@ package component_tree
 
 import (
 	"fmt"
-	"io"
 	"strings"
 	"sync"
 
@@ -102,12 +101,25 @@ func (t *ComponentTree) EachComponent(fn func(address string, name string, c *Co
 	t.mu.RLock()
 	defer t.mu.RUnlock()
 
-	for address, node := range t.components {
-		if err := fn(address, node.name, node.component); err != nil {
-			return err
-		}
+	var (
+		wg      sync.WaitGroup
+		once    sync.Once
+		firstErr error
+	)
+
+	for address, n := range t.components {
+		wg.Add(1)
+		go func(address string, node *node) {
+			defer wg.Done()
+			if err := fn(address, node.name, node.component); err != nil {
+				logger.Errorw("Error in EachComponent callback", "address", address, "error", err)
+				once.Do(func() { firstErr = err })
+				}
+			}(address, n)
 	}
-	return nil
+
+	wg.Wait()
+	return firstErr
 }
 
 /*
