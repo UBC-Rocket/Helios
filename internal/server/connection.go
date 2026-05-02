@@ -14,26 +14,30 @@ import (
 const MAX_MAILBOX_SIZE = 128
 
 type ClientInfo struct {
-	version int
-	address string
+	Version int
+	Address string
 }
 
 type ConnectionHandler struct {
-	ctx     context.Context
-	conn    net.Conn
-	mailbox chan *transport.TransportMessage
+	ctx      context.Context
+	conn     net.Conn
+	attacher ComponentAttacher
+	mailbox  chan *transport.TransportMessage
 }
 
-func NewConnectionHandler(ctx context.Context, conn net.Conn) *ConnectionHandler {
+func NewConnectionHandler(ctx context.Context, conn net.Conn, attacher ComponentAttacher) *ConnectionHandler {
 	return &ConnectionHandler{
-		ctx:     ctx,
-		conn:    conn,
-		mailbox: make(chan *transport.TransportMessage, MAX_MAILBOX_SIZE),
+		ctx:      ctx,
+		conn:     conn,
+		attacher: attacher,
+		mailbox:  make(chan *transport.TransportMessage, MAX_MAILBOX_SIZE),
 	}
 }
 
 func (h *ConnectionHandler) Handle() {
-	clientInfo, err := h.performHandshake()
+	defer h.Close()
+
+	clientInfo, err := h.PerformHandshake()
 
 	if err != nil {
 		if h.ctx.Err() != nil {
@@ -46,6 +50,7 @@ func (h *ConnectionHandler) Handle() {
 		}
 
 		logger.Errorw("Error reading from connection", "remote_address", h.conn.RemoteAddr(), "error", err)
+		return
 	}
 
 	logger.Debugw("Handshake successful", "remote_address", h.conn.RemoteAddr(), "client_info", clientInfo)
@@ -55,10 +60,9 @@ func (h *ConnectionHandler) Handle() {
 
 	<-h.ctx.Done()
 	logger.Infow("Closing connection", "remote_address", h.conn.RemoteAddr())
-	h.Close()
 }
 
-func (h *ConnectionHandler) performHandshake() (ClientInfo, error) {
+func (h *ConnectionHandler) PerformHandshake() (ClientInfo, error) {
 	// Start Handshake
 	transportMessage, err := ReadMessage(h.conn)
 	if err != nil {
@@ -75,6 +79,18 @@ func (h *ConnectionHandler) performHandshake() (ClientInfo, error) {
 	clientVersion := int(handshakeRequest.GetVersion())
 	if clientVersion != PROTOCOL_VERSION {
 		return ClientInfo{}, fmt.Errorf("Unsupported protocol version from client: %d", handshakeRequest.GetVersion())
+	}
+
+	clientAddress := handshakeRequest.GetClientAddress()
+	if clientAddress == "" {
+		return ClientInfo{}, fmt.Errorf("handshake missing client_address")
+	}
+
+	if h.attacher != nil {
+		err = h.attacher.AttachConnection(clientAddress, h.conn, handshakeRequest.GetMustBeRegistered())
+		if err != nil {
+			return ClientInfo{}, err
+		}
 	}
 
 	// Send Handshake Response
@@ -94,8 +110,8 @@ func (h *ConnectionHandler) performHandshake() (ClientInfo, error) {
 	logger.Infow("Handshake response sent", "remote_address", h.conn.RemoteAddr(), "message", handshakeResponse)
 
 	clientInfo := ClientInfo{
-		version: clientVersion,
-		address: h.conn.RemoteAddr().String(),
+		Version: clientVersion,
+		Address: clientAddress,
 	}
 
 	return clientInfo, nil

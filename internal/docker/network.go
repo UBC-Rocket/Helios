@@ -40,7 +40,7 @@ func (c *DockerClient) StartDockerNetwork(networkName string) (resp network.Crea
 	if err != nil {
 		return network.CreateResponse{}, err
 	}
-	fmt.Println("'", networkName, "' network created:", resp.ID)
+	fmt.Println("'", networkName, "' network created:", result.ID)
 
 	c.net = result
 	return result, nil

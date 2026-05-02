@@ -10,9 +10,14 @@ import (
 
 type Server struct {
 	listener net.Listener
+	attacher ComponentAttacher
 }
 
-func StartServer(ctx context.Context, addr string) (*Server, error) {
+type ComponentAttacher interface {
+	AttachConnection(address string, conn net.Conn, mustBeRegistered bool) error
+}
+
+func StartServer(ctx context.Context, addr string, attacher ComponentAttacher) (*Server, error) {
 	logger.Infow("Starting server", "address", addr)
 
 	listener, err := net.Listen("tcp", addr)
@@ -22,6 +27,7 @@ func StartServer(ctx context.Context, addr string) (*Server, error) {
 
 	server := &Server{
 		listener: listener,
+		attacher: attacher,
 	}
 
 	go server.listenForConnections(ctx)
@@ -49,10 +55,14 @@ func (s *Server) listenForConnections(ctx context.Context) {
 func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	logger.Infow("New connection", "remote_address", conn.RemoteAddr())
 
-	handler := NewConnectionHandler(ctx, conn)
+	handler := NewConnectionHandler(ctx, conn, s.attacher)
 	handler.Handle()
 }
 
 func (s *Server) Close() error {
 	return s.listener.Close()
+}
+
+func (s *Server) Addr() net.Addr {
+	return s.listener.Addr()
 }

@@ -2,11 +2,13 @@ package core
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"strings"
 
 	configpb "helios/generated/config"
 	componenttree "helios/internal/component_tree"
+	"helios/internal/docker"
 	"helios/internal/logger"
 
 	"google.golang.org/protobuf/encoding/protojson"
@@ -16,9 +18,9 @@ type Core struct {
 	ctx context.Context
 	// Unique identifier for the specific Helios instance.
 	// Allows re-attaching to the same docker containers if the central helios instance is restarted.
-	runtineHash string
-	usingDocker bool
-	// dockerClient *docker.DockerClient
+	runtineHash  string
+	usingDocker  bool
+	dockerClient *docker.DockerClient
 	// server       *server.Server
 	// Represents a tree hierarchy of components.
 	tree *componenttree.ComponentTree
@@ -66,20 +68,20 @@ func (c *Core) InitializeComponentTree(path string) error {
  * Initializes the Docker runtime.
  */
 func (c *Core) InitializeDockerRuntime(socketPath string) error {
-	// if !c.usingDocker {
-	// 	return nil
-	// }
-	// if c.dockerClient != nil {
-	// 	return fmt.Errorf("Docker runtime already initialized")
-	// }
-	// logger.Infow("Initializing docker runtime", "socketPath", socketPath, "runtimeHash", c.runtineHash)
-	// c.dockerClient = docker.NewDockerClient(c.ctx, socketPath, c.runtineHash)
-	// if err := c.dockerClient.Initialize(); err != nil {
-	// 	return err
-	// }
-	// if err := c.dockerClient.StartConfigured(c); err != nil {
-	// 	return err
-	// }
+	if !c.usingDocker {
+		return nil
+	}
+	if c.dockerClient != nil {
+		return fmt.Errorf("Docker runtime already initialized")
+	}
+	logger.Infow("Initializing docker runtime", "socketPath", socketPath, "runtimeHash", c.runtineHash)
+	c.dockerClient = docker.NewDockerClient(c.ctx, socketPath, c.runtineHash)
+	if err := c.dockerClient.Initialize(); err != nil {
+		return err
+	}
+	if err := c.dockerClient.StartConfigured(c.tree); err != nil {
+		return err
+	}
 	return nil
 }
 

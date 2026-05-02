@@ -4,46 +4,74 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"regexp"
 	"strings"
-	"sync"
 
-	"helios/generated/config"
-	"helios/internal/transport"
+	ct "helios/internal/component_tree"
+
+	configpb "helios/generated/config"
+
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/docker/go-connections/nat"
+)
+
+const (
+	NET_NAME = "HeliosNet"
 )
 
 type DockerClient struct {
-	cli *client.Client
-	ctx context.Context
-	net network.CreateResponse
+	cli         *client.Client
+	ctx         context.Context
+	net         network.CreateResponse
+	socketPath  string
+	runtimeHash string
 }
 
-type ComponentObject struct {
-	Mu           sync.RWMutex
-	ContainerID  string // Docker ID
-	ComponentID  string
-	Group        string // Tree group
-	Path         string // Path to component code, is this necessary?
-	Tag          string // TODO: Do we want to keep this?
-	Volumes      []*config.Volume // List of volume mappings for the component
-	Ports        []*config.Port // List of port mappings for the component
-	CommHandler  *transport.CommClient
-	SkipSpawn		 bool // Flag to indicate whether to skip spawning this component
+func NewDockerClient(ctx context.Context, socketPath string, runtimeHash string) *DockerClient {
+	return &DockerClient{
+		ctx:         ctx,
+		socketPath:  socketPath,
+		runtimeHash: runtimeHash,
+	}
 }
 
 // Initialize the Docker client.
-func (c *DockerClient) Initialize() {
-	ctx := context.Background()
-	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
+func (c *DockerClient) Initialize() error {
+	host := "unix://" + c.socketPath // TODO: Support windows??
+	cli, err := client.NewClientWithOpts(client.WithHost(host), client.WithAPIVersionNegotiation())
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	c.cli = cli
-	c.ctx = ctx
+	return nil
+}
+
+func (c *DockerClient) StartConfigured(tree *ct.ComponentTree) error {
+	if tree == nil {
+		return nil
+	}
+
+	_, netErr := c.StartDockerNetwork(NET_NAME)
+	if netErr != nil {
+		return netErr
+	}
+
+	return tree.ForEachDockerSpec(func(address string, spec *configpb.DockerSpec) error {
+		name := ContainerName(address, spec)
+
+		id := c.StartContainer(name, spec, c.runtimeHash)
+
+		tree.SetDockerContainerID(address, id)
+		return nil
+	})
+}
+
+func (c *DockerClient) SocketPath() string {
+	return c.socketPath
 }
 
 // Close the Docker client.
@@ -58,7 +86,7 @@ func (c *DockerClient) GetContainerID(containerName string) (containerID string)
 	var contID string = ""
 
 	for _, cont := range list {
-		if cont.Names[0] == "/"+containerName {
+		if len(cont.Names) > 0 && cont.Names[0] == "/"+containerName {
 			contID = cont.ID
 			break
 		}
@@ -78,44 +106,48 @@ func (c *DockerClient) GetContainers() (summary []container.Summary) {
 
 // Create a container using information from the image struct and runtime_hash.
 // It should be checked if a container already exists with the same name and hash before calling this function.
-func (c *DockerClient) createContainer(name string, component *ComponentObject, hash string) (response container.CreateResponse, error error) {
-	var deviceMappings []container.DeviceMapping
-
+func (c *DockerClient) createContainer(name string, spec *configpb.DockerSpec, hash string) (response container.CreateResponse, error error) {
 	// Port bindings
-	for _, port := range component.Ports {
-		var mode string = "rwm"
-		// TODO: Implement different modes for port mappings if necessary
-		// if path.Mode != "" {
-		// 	mode = path.Mode
-		// }
-
-		deviceMappings = append(deviceMappings, container.DeviceMapping{
-			PathOnHost:        port.Source,
-			PathInContainer:   port.Target,
-			CgroupPermissions: mode,
-		})
+	exposedPorts := nat.PortSet{}
+	portBindings := nat.PortMap{}
+	for _, port := range spec.GetPorts() {
+		target := strings.TrimSpace(port.GetTarget())
+		if target == "" {
+			continue
+		}
+		protocol := port.GetType()
+		if protocol == "" {
+			protocol = "tcp"
+		}
+		dockerPort := nat.Port(target + "/" + protocol)
+		exposedPorts[dockerPort] = struct{}{}
+		if source := strings.TrimSpace(port.GetSource()); source != "" {
+			portBindings[dockerPort] = append(portBindings[dockerPort], nat.PortBinding{HostPort: source})
+		}
 	}
 
 	// Volume bindings
 	var volumeBinds []string
-	for _, volume := range component.Volumes {
-		var mode string = "rw"
+	for _, volume := range spec.GetVolumes() {
+		mode := volume.GetMode()
+		if mode == "" {
+			mode = "rw"
+		}
 		volumeBinds = append(volumeBinds, fmt.Sprintf("%s:%s:%s", volume.Source, volume.Target, mode))
 	}
 
 	// Create container
 	resp, err := c.cli.ContainerCreate(c.ctx,
 		&container.Config{
-			Image: strings.ToLower(name),
+			Image:        imageName(name, spec),
+			ExposedPorts: exposedPorts,
 			Labels: map[string]string{
 				"runtime_hash": hash,
 			},
 		},
 		&container.HostConfig{
-			Binds: volumeBinds,
-			Resources: container.Resources{
-				Devices: deviceMappings,
-			},
+			Binds:        volumeBinds,
+			PortBindings: portBindings,
 		},
 		nil, nil, name)
 	if err != nil {
@@ -128,13 +160,13 @@ func (c *DockerClient) createContainer(name string, component *ComponentObject, 
 // If the container already exists, it will be restarted or removed and recreated if the hash does not match.
 // Returns the container ID of the started container.
 // Created container will be added to the docker network and started.
-func (c *DockerClient) StartContainer(name string, component *ComponentObject, hash string) (ID string) {
+func (c *DockerClient) StartContainer(name string, spec *configpb.DockerSpec, hash string) (ID string) {
 	list := c.GetContainers()
 	var cont container.Summary = container.Summary{}
 
 	// Find container by name to see if it exists
 	for _, x := range list {
-		if x.Names[0] == "/"+name {
+		if len(x.Names) > 0 && x.Names[0] == "/"+name {
 			cont = x
 			break
 		}
@@ -156,13 +188,13 @@ func (c *DockerClient) StartContainer(name string, component *ComponentObject, h
 			// Do nothing
 		} else if cont.State == "exited" {
 			// Restart it
-			c.startDockerContainer(cont.ID)
+			go c.startDockerContainer(cont.ID)
 		}
 	}
 
 	// If container does not exist, create it
 	if cont.ID == "" {
-		contResp, contErr := c.createContainer(name, component, hash)
+		contResp, contErr := c.createContainer(name, spec, hash)
 		if contErr != nil {
 			// TODO: Handle error properly
 			fmt.Println("Error creating container:", contErr)
@@ -202,4 +234,32 @@ func (c *DockerClient) startDockerContainer(ID string) {
 	}
 
 	stdcopy.StdCopy(os.Stdout, os.Stderr, out)
+}
+
+func ContainerName(address string, spec *configpb.DockerSpec) string {
+	if strings.TrimSpace(spec.GetContainerName()) != "" {
+		return spec.GetContainerName()
+	}
+	return sanitizeContainerName(address)
+}
+
+func imageName(name string, spec *configpb.DockerSpec) string {
+	image := strings.TrimSpace(spec.GetImage())
+	if image == "" {
+		image = name
+	}
+	if strings.TrimSpace(spec.GetTag()) != "" && !strings.Contains(image, ":") {
+		image += ":" + spec.GetTag()
+	}
+	return strings.ToLower(image)
+}
+
+func sanitizeContainerName(address string) string {
+	sanitized := strings.ToLower(address)
+	sanitized = regexp.MustCompile(`[^a-z0-9_.-]+`).ReplaceAllString(sanitized, "-")
+	sanitized = strings.Trim(sanitized, "-_.")
+	if sanitized == "" {
+		return "helios-component"
+	}
+	return sanitized
 }

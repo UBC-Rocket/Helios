@@ -2,8 +2,11 @@ package component_tree
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"sync"
+
+	configpb "helios/generated/config"
 )
 
 /*
@@ -91,8 +94,88 @@ func (t *ComponentTree) AddComponentGroup(parentAddress string, name string) (st
 	return t.addComponentGroup(parent, name)
 }
 
-func (t *ComponentTree) Close() error {
+func (t *ComponentTree) AttachConnection(address string, conn net.Conn, mustBeRegistered bool) error {
+	t.mu.RLock()
+	node, ok := t.components[address]
+	t.mu.RUnlock()
+
+	if !ok {
+		if mustBeRegistered {
+			return fmt.Errorf("unknown component address %q", address)
+		}
+		// TODO: expand the component tree with missing branch and leaf nodes for this address.
+		return nil
+	}
+
+	node.component.mu.Lock()
+	node.component.transportConn = &TransportConn{Conn: conn}
+	node.component.mu.Unlock()
 	return nil
+}
+
+func (t *ComponentTree) ForEachDockerSpec(fn func(address string, spec *configpb.DockerSpec) error) error {
+	t.mu.RLock()
+	entries := make([]struct {
+		address string
+		spec    *configpb.DockerSpec
+	}, 0, len(t.components))
+
+	for address, node := range t.components {
+		node.component.mu.RLock()
+		spec := node.component.dockerSpec
+		node.component.mu.RUnlock()
+		if spec != nil && !spec.GetSkipSpawn() {
+			entries = append(entries, struct {
+				address string
+				spec    *configpb.DockerSpec
+			}{address: address, spec: spec})
+		}
+	}
+	t.mu.RUnlock()
+
+	for _, entry := range entries {
+		if err := fn(entry.address, entry.spec); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (t *ComponentTree) SetDockerContainerID(address string, containerID string) bool {
+	t.mu.RLock()
+	node, ok := t.components[address]
+	t.mu.RUnlock()
+	if !ok {
+		return false
+	}
+
+	node.component.mu.Lock()
+	node.component.dockerConn = &DockerConn{ContainerID: containerID}
+	node.component.mu.Unlock()
+	return true
+}
+
+func (t *ComponentTree) Close() error {
+	t.mu.RLock()
+	components := make([]*Component, 0, len(t.components))
+	for _, node := range t.components {
+		components = append(components, node.component)
+	}
+	t.mu.RUnlock()
+
+	var firstErr error
+	for _, component := range components {
+		component.mu.Lock()
+		conn := component.transportConn
+		component.transportConn = nil
+		component.mu.Unlock()
+		if conn != nil && conn.Conn != nil {
+			if err := conn.Conn.Close(); err != nil && firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }
 
 /*
@@ -179,11 +262,7 @@ func (t *ComponentTree) addComponentGroup(parent *node, name string) (string, er
 	return address, nil
 }
 
-/*
- * ========================================================
- * = Internal validation and lookup helpers
- * ========================================================
- */
+// Internal validation and lookup helpers
 
 func (t *ComponentTree) branchAtAddress(address string) (*node, error) {
 	t.mu.RLock()

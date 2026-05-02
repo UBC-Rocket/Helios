@@ -25,7 +25,7 @@ deps:
 	go mod tidy
 
 run:
-	go run $(MAIN_PATH) --local
+	go run $(MAIN_PATH)
 
 clean:
 	rm -rf $(BUILD_DIR)
