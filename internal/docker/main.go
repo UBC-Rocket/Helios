@@ -21,6 +21,7 @@ type DockerClient struct {
 	net network.CreateResponse
 }
 
+// TODO: Remove this and use the protobuf definition
 type ComponentObject struct {
 	Mu           sync.RWMutex
 	ContainerID  string // Docker ID
@@ -34,22 +35,40 @@ type ComponentObject struct {
 	SkipSpawn		 bool // Flag to indicate whether to skip spawning this component
 }
 
+func NewDockerClient(ctx context.Context) *DockerClient {
+	return &DockerClient{
+		ctx: ctx,
+	}
+}
+
 // Initialize the Docker client.
-func (c *DockerClient) Initialize() {
-	ctx := context.Background()
+func (c *DockerClient) Initialize() error {
 	cli, err := client.NewClientWithOpts(client.FromEnv, client.WithAPIVersionNegotiation())
 	if err != nil {
-		panic(err)
+		return err
 	}
 
 	c.cli = cli
-	c.ctx = ctx
+	return nil
+}
+
+// Start configured components in Docker based on the component tree in the core.
+func (c *DockerClient) StartConfigured() error {
+	return nil
 }
 
 // Close the Docker client.
-func (c *DockerClient) Close() {
-	c.cli.Close()
+func (c *DockerClient) Close() error {
+	return c.cli.Close()
 }
+
+//
+// OLD CODE
+//
+
+
+
+
 
 // Get the ID of an existing container given it's name.
 // Returns the ID if found and "" if it does not exist.
