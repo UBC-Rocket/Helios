@@ -107,6 +107,7 @@ func (c *DockerClient) createContainer(name string, component *ComponentObject, 
 	resp, err := c.cli.ContainerCreate(c.ctx,
 		&container.Config{
 			Image: strings.ToLower(name),
+			Tty:  true,
 			Labels: map[string]string{
 				"runtime_hash": hash,
 			},
