@@ -3,8 +3,8 @@ package main
 import (
 	"context"
 	"fmt"
+	"helios/internal/core"
 	"helios/internal/logger"
-	"helios/internal/server"
 	"os"
 	"os/signal"
 	"syscall"
@@ -23,9 +23,15 @@ func main() {
 				Aliases: []string{"a"},
 			},
 			&cli.BoolFlag{
-				Name:    "local",
-				Aliases: []string{"l"},
-				Usage:   "run components locally instead of Docker",
+				Name:    "docker",
+				Aliases: []string{"d"},
+				Usage:   "start configured components in Docker",
+			},
+			&cli.StringFlag{
+				Name:    "docker-socket",
+				Aliases: []string{"D"},
+				Usage:   "path to the Docker socket",
+				Value:   "/var/run/docker.sock",
 			},
 			&cli.StringFlag{
 				Name:  "component-tree",
@@ -54,7 +60,6 @@ func main() {
 }
 
 func runHelios(ctx context.Context, cmd *cli.Command) error {
-	// Initialize logger
 	logger.MustInit(cmd.String("log-level"), os.Stderr)
 	defer func() { _ = logger.Sync() }()
 
@@ -65,23 +70,26 @@ func runHelios(ctx context.Context, cmd *cli.Command) error {
 	shutdownCtx, stop := signal.NotifyContext(ctx, os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// coreClient := core.Initialize(runType, cmd.String("runtime-hash"))
-	// defer coreClient.Close()
+	helios := core.Initialize(shutdownCtx, cmd.String("runtime-hash"), cmd.Bool("docker"))
+	defer helios.Close()
 
-	// Start the Helios tcp server
-	address := cmd.String("address")
-	srv, err := server.StartServer(shutdownCtx, address)
-	if err != nil {
-		logger.Errorw("Error starting server", "error", err)
-		return fmt.Errorf("error starting server: %w", err)
+	// TODO: Introduce other ways of loading the component tree that is not just a file.
+	if err := helios.InitializeComponentTree(cmd.String("component-tree")); err != nil {
+		logger.Errorw("Failed to initialize component tree", "error", err)
+		return fmt.Errorf("Failed to initialize component tree: %w", err)
 	}
-	defer func() { _ = srv.Close() }()
 
-	// coreClient.InitializeComponentTree(cmd.String("component-tree"))
-	// go coreClient.StartAllComponents()
+	if err := helios.InitializeDockerRuntime(cmd.String("docker-socket")); err != nil {
+		logger.Errorw("Failed to initialize Docker runtime", "error", err)
+		return fmt.Errorf("Failed to initialize Docker runtime: %w", err)
+	}
+
+	if err := helios.InitializeServer(cmd.String("address")); err != nil {
+		logger.Errorw("Failed to initialize server", "error", err)
+		return fmt.Errorf("Failed to initialize server: %w", err)
+	}
 
 	logger.Info("Running...")
-
 	<-shutdownCtx.Done()
 	logger.Info("shutting down")
 	return nil
