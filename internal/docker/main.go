@@ -134,10 +134,12 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 		} else {
 			if cont.State == "running" {
 				// Do nothing
+				comp.SetDockerConnID(cont.ID)
 				return nil
 			} else if cont.State == "exited" {
 				// Restart it
 				c.startDockerContainer(cont.ID)
+				comp.SetDockerConnID(cont.ID)
 				return nil
 			}
 		}
@@ -149,7 +151,8 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 		return contErr
 	}
 	cont.ID = contResp.ID
-	
+
+	comp.SetDockerConnID(cont.ID)
 
 	// Add to network and start container
 	go c.AddContainerToNetwork(cont.ID) //TODO: Check if this shoud be here
