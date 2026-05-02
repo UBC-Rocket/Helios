@@ -27,3 +27,9 @@ type DockerConn struct {
 type TransportConn struct {
 	Conn net.Conn
 }
+
+func GetDockerSpec(c *Component) *config.DockerSpec {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return c.dockerSpec
+}

@@ -3,41 +3,46 @@ package docker
 import (
 	"context"
 	"fmt"
-	"os"
 	"strings"
-	"sync"
 
-	"helios/generated/config"
-	"helios/internal/transport"
+	componenttree "helios/internal/component_tree"
+
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
-	"github.com/docker/docker/pkg/stdcopy"
 )
 
 type DockerClient struct {
+	runtimeHash string
 	cli *client.Client
 	ctx context.Context
 	net network.CreateResponse
 }
 
 // TODO: Remove this and use the protobuf definition
-type ComponentObject struct {
-	Mu           sync.RWMutex
-	ContainerID  string // Docker ID
-	ComponentID  string
-	Group        string // Tree group
-	Path         string // Path to component code, is this necessary?
-	Tag          string // TODO: Do we want to keep this?
-	Volumes      []*config.Volume // List of volume mappings for the component
-	Ports        []*config.Port // List of port mappings for the component
-	CommHandler  *transport.CommClient
-	SkipSpawn		 bool // Flag to indicate whether to skip spawning this component
-}
+// type ComponentObject struct {
+// 	Mu           sync.RWMutex
+// 	ContainerID  string // Docker ID
+// 	ComponentID  string
+// 	Group        string // Tree group
+// 	Path         string // Path to component code, is this necessary?
+// 	Tag          string // TODO: Do we want to keep this?
+// 	Volumes      []*config.Volume // List of volume mappings for the component
+// 	Ports        []*config.Port // List of port mappings for the component
+// 	CommHandler  *transport.CommClient
+// 	SkipSpawn		 bool // Flag to indicate whether to skip spawning this component
+// }
 
-func NewDockerClient(ctx context.Context) *DockerClient {
+/*
+ * ========================================================
+ * = Public methods for managing Docker runtime
+ * ========================================================
+ */
+
+func NewDockerClient(ctx context.Context, hash string) *DockerClient {
 	return &DockerClient{
-		ctx: ctx,
+		ctx:         ctx,
+		runtimeHash: hash,
 	}
 }
 
@@ -53,7 +58,10 @@ func (c *DockerClient) Initialize() error {
 }
 
 // Start configured components in Docker based on the component tree in the core.
-func (c *DockerClient) StartConfigured() error {
+func (c *DockerClient) StartConfigured(t *componenttree.ComponentTree) error {
+	if err := t.EachComponent(c.startContainer); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -62,18 +70,18 @@ func (c *DockerClient) Close() error {
 	return c.cli.Close()
 }
 
-//
-// OLD CODE
-//
 
-
-
+/*
+ * ========================================================
+ * = Internal structures for managing component state and connections
+ * ========================================================
+ */
 
 
 // Get the ID of an existing container given it's name.
 // Returns the ID if found and "" if it does not exist.
-func (c *DockerClient) GetContainerID(containerName string) (containerID string) {
-	list := c.GetContainers()
+func (c *DockerClient) getContainerID(containerName string) (containerID string) {
+	list := c.getContainers()
 	var contID string = ""
 
 	for _, cont := range list {
@@ -87,7 +95,7 @@ func (c *DockerClient) GetContainerID(containerName string) (containerID string)
 }
 
 // Get a list of all containers.
-func (c *DockerClient) GetContainers() (summary []container.Summary) {
+func (c *DockerClient) getContainers() (summary []container.Summary) {
 	list, err := c.cli.ContainerList(c.ctx, container.ListOptions{All: true})
 	if err != nil {
 		panic(err)
@@ -95,13 +103,71 @@ func (c *DockerClient) GetContainers() (summary []container.Summary) {
 	return list
 }
 
+// Start a container given a pointer to the component struct.
+// If the container already exists, it will be restarted or removed and recreated if the hash does not match.
+// Created container will be added to the docker network and started.
+func (c *DockerClient) startContainer(address string, name string, comp *componenttree.Component) error {
+	list := c.getContainers()
+	var cont container.Summary = container.Summary{}
+
+	// Find container by name to see if it exists
+	for _, x := range list {
+		if x.Names[0] == "/"+name {
+			cont = x
+			break
+		}
+	}
+
+	// If container exists, handle the various cases
+	if (cont.ID != "") {
+		// If the runtime hash does not match
+		if cont.Labels["runtime_hash"] != c.runtimeHash {
+			// Remove the container
+			if err := c.cli.ContainerRemove(c.ctx, cont.ID, container.RemoveOptions{Force: true}); err != nil {
+				return err
+			}
+
+			// Reset cont to indicate it does not exist
+			cont = container.Summary{}
+		
+		// If the runtime hash matches, check if is exited or running
+		} else {
+			if cont.State == "running" {
+				// Do nothing
+				return nil
+			} else if cont.State == "exited" {
+				// Restart it
+				c.startDockerContainer(cont.ID)
+				return nil
+			}
+		}
+	}
+
+	// Container does not exist, create it
+	contResp, contErr := c.createContainer(address, name, comp)
+	if contErr != nil {
+		return contErr
+	}
+	cont.ID = contResp.ID
+	
+
+	// Add to network and start container
+	go c.AddContainerToNetwork(cont.ID) //TODO: Check if this shoud be here
+	go c.startDockerContainer(cont.ID)
+	return nil
+}
+
 // Create a container using information from the image struct and runtime_hash.
 // It should be checked if a container already exists with the same name and hash before calling this function.
-func (c *DockerClient) createContainer(name string, component *ComponentObject, hash string) (response container.CreateResponse, error error) {
+func (c *DockerClient) createContainer(address string, name string, comp *componenttree.Component) (container.CreateResponse, error) {
 	var deviceMappings []container.DeviceMapping
+	info := comp.GetDockerSpec()
+	if info == nil {
+		return container.CreateResponse{}, fmt.Errorf("No DockerSpec found for component at address %s", address)
+	}
 
 	// Port bindings
-	for _, port := range component.Ports {
+	for _, port := range info.Ports {
 		var mode string = "rwm"
 		// TODO: Implement different modes for port mappings if necessary
 		// if path.Mode != "" {
@@ -117,7 +183,7 @@ func (c *DockerClient) createContainer(name string, component *ComponentObject, 
 
 	// Volume bindings
 	var volumeBinds []string
-	for _, volume := range component.Volumes {
+	for _, volume := range info.Volumes {
 		var mode string = "rw"
 		volumeBinds = append(volumeBinds, fmt.Sprintf("%s:%s:%s", volume.Source, volume.Target, mode))
 	}
@@ -127,7 +193,7 @@ func (c *DockerClient) createContainer(name string, component *ComponentObject, 
 		&container.Config{
 			Image: strings.ToLower(name),
 			Labels: map[string]string{
-				"runtime_hash": hash,
+				"runtime_hash": c.runtimeHash,
 			},
 		},
 		&container.HostConfig{
@@ -143,82 +209,10 @@ func (c *DockerClient) createContainer(name string, component *ComponentObject, 
 	return resp, nil
 }
 
-// Start a container given its name, tag, and runtime_hash.
-// If the container already exists, it will be restarted or removed and recreated if the hash does not match.
-// Returns the container ID of the started container.
-// Created container will be added to the docker network and started.
-func (c *DockerClient) StartContainer(name string, component *ComponentObject, hash string) (ID string) {
-	list := c.GetContainers()
-	var cont container.Summary = container.Summary{}
-
-	// Find container by name to see if it exists
-	for _, x := range list {
-		if x.Names[0] == "/"+name {
-			cont = x
-			break
-		}
-	}
-
-	// If the runtime hash does not match
-	if (cont.ID != "") && (cont.Labels["runtime_hash"] != hash) {
-		// Remove the container
-		if err := c.cli.ContainerRemove(c.ctx, cont.ID, container.RemoveOptions{Force: true}); err != nil {
-			fmt.Println("Error removing outdated container:", err)
-		}
-
-		// Reset cont to indicate it does not exist
-		cont = container.Summary{}
-
-		// If the runtime hash matches, check if is exited or running
-	} else if cont.ID != "" {
-		if cont.State == "running" {
-			// Do nothing
-		} else if cont.State == "exited" {
-			// Restart it
-			c.startDockerContainer(cont.ID)
-		}
-	}
-
-	// If container does not exist, create it
-	if cont.ID == "" {
-		contResp, contErr := c.createContainer(name, component, hash)
-		if contErr != nil {
-			// TODO: Handle error properly
-			fmt.Println("Error creating container:", contErr)
-		}
-		cont.ID = contResp.ID
-	}
-
-	// Add to network and start container
-	go c.AddContainerToNetwork(cont.ID)
-	go c.startDockerContainer(cont.ID)
-	return cont.ID
-}
-
 // Start a docker container by ID.
-func (c *DockerClient) startDockerContainer(ID string) {
-
-	// Start container
+func (c *DockerClient) startDockerContainer(ID string) error {
 	if err := c.cli.ContainerStart(c.ctx, ID, container.StartOptions{}); err != nil {
-		panic(err)
+		return err
 	}
-
-	// Wait until it finishes
-	waitStatusCh, waitErrCh := c.cli.ContainerWait(c.ctx, ID, container.WaitConditionNotRunning)
-	select {
-	case err := <-waitErrCh:
-		if err != nil {
-			panic(err)
-		}
-	case <-waitStatusCh:
-	}
-
-	// Get logs
-	//TODO: Move this to a seperate logging driver later
-	out, err := c.cli.ContainerLogs(c.ctx, ID, container.LogsOptions{ShowStdout: true})
-	if err != nil {
-		panic(err)
-	}
-
-	stdcopy.StdCopy(os.Stdout, os.Stderr, out)
+	return nil
 }

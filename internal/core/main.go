@@ -76,13 +76,14 @@ func (c *Core) InitializeDockerRuntime(socketPath string) error {
 		return fmt.Errorf("Docker runtime already initialized")
 	}
 	logger.Infow("Initializing docker runtime", "socketPath", socketPath, "runtimeHash", c.runtimeHash)
-	c.dockerClient = docker.NewDockerClient(c.ctx)
+	c.dockerClient = docker.NewDockerClient(c.ctx, c.runtimeHash)
 	if err := c.dockerClient.Initialize(); err != nil {
 		return err
 	}
-	if err := c.dockerClient.StartConfigured(); err != nil {
+	if err := c.dockerClient.StartConfigured(c.tree); err != nil {
 		return err
 	}
+	return nil
 }
 
 /*
@@ -102,6 +103,7 @@ func (c *Core) InitializeServer(address string) error {
 }
 
 func (c *Core) Close() error {
+	// Close docker client
 	if c.dockerClient != nil {
 		err := c.dockerClient.Close()
 		if err != nil {

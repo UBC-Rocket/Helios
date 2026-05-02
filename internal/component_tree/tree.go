@@ -2,6 +2,7 @@ package component_tree
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"sync"
 
@@ -94,6 +95,18 @@ func (t *ComponentTree) AddComponentGroup(parentAddress string, name string) (st
 }
 
 func (t *ComponentTree) Close() error {
+	return nil
+}
+
+func (t *ComponentTree) EachComponent(fn func(address string, name string, c *Component) error) error {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	for address, node := range t.components {
+		if err := fn(address, node.name, node.component); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
