@@ -94,6 +94,19 @@ func (t *ComponentTree) AddComponentGroup(parentAddress string, name string) (st
 }
 
 func (t *ComponentTree) Close() error {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	errorOccurred := false
+	for address, node := range t.components {
+		if err := node.component.close(); err != nil {
+			logger.Errorw("Failed to close component", "address", address, "error", err)
+			errorOccurred = true
+		}
+	}
+	if errorOccurred {
+		return fmt.Errorf("component tree close failed")
+	}
 	return nil
 }
 
