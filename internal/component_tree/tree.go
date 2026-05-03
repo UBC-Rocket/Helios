@@ -97,6 +97,31 @@ func (t *ComponentTree) Close() error {
 	return nil
 }
 
+func (t *ComponentTree) EachComponent(fn func(address string, name string, c *Component) error) error {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	var (
+		wg      sync.WaitGroup
+		once    sync.Once
+		firstErr error
+	)
+
+	for address, n := range t.components {
+		wg.Add(1)
+		go func(address string, node *node) {
+			defer wg.Done()
+			if err := fn(address, node.name, node.component); err != nil {
+				logger.Errorw("Error in EachComponent callback", "address", address, "error", err)
+				once.Do(func() { firstErr = err })
+				}
+			}(address, n)
+	}
+
+	wg.Wait()
+	return firstErr
+}
+
 /*
  * ========================================================
  * = Internal shape mutations
