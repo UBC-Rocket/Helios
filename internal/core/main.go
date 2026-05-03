@@ -42,6 +42,8 @@ func (c *Core) InitializeComponentTree(path string) error {
 	logger.Infow("Initializing component tree", "path", path)
 
 	if strings.TrimSpace(path) == "" {
+		c.tree = tree.New()
+		logger.Info("No component tree configured; starting with an empty component tree")
 		return nil
 	}
 
