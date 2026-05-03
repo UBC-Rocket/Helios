@@ -3,16 +3,24 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net"
 
+	tree "helios/internal/component_tree"
 	"helios/internal/logger"
+	"helios/internal/transport"
 )
 
 type Server struct {
-	listener net.Listener
+	listener  net.Listener
+	transport *transport.TransportService
 }
 
-func StartServer(ctx context.Context, addr string) (*Server, error) {
+func StartServer(ctx context.Context, addr string, tree *tree.ComponentTree) (*Server, error) {
+	if tree == nil {
+		return nil, fmt.Errorf("component tree is nil")
+	}
+
 	logger.Infow("Starting server", "address", addr)
 
 	listener, err := net.Listen("tcp", addr)
@@ -21,7 +29,8 @@ func StartServer(ctx context.Context, addr string) (*Server, error) {
 	}
 
 	server := &Server{
-		listener: listener,
+		listener:  listener,
+		transport: transport.NewTransportService(tree),
 	}
 
 	go server.listenForConnections(ctx)
@@ -49,7 +58,7 @@ func (s *Server) listenForConnections(ctx context.Context) {
 func (s *Server) handleConnection(ctx context.Context, conn net.Conn) {
 	logger.Infow("New connection", "remote_address", conn.RemoteAddr())
 
-	handler := NewConnectionHandler(ctx, conn)
+	handler := NewConnectionHandler(ctx, conn, s.transport)
 	handler.Handle()
 }
 

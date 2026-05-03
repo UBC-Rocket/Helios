@@ -6,14 +6,15 @@ import (
 
 	"helios/generated/config"
 	"helios/generated/transport"
+	transportpb "helios/generated/transport"
 )
 
 type Component struct {
-	mu            sync.RWMutex
-	dockerSpec    *config.DockerSpec
-	dockerConn    *DockerConn
-	transportConn *TransportConn
-	events        map[string]*transport.Event
+	mu         sync.RWMutex
+	dockerSpec *config.DockerSpec
+	dockerConn *DockerConn
+	conn       net.Conn
+	events     map[string]*transportpb.Event
 }
 
 type DockerConn struct {
@@ -35,25 +36,24 @@ func (c *Component) attachConnection(conn net.Conn) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.transportConn = &TransportConn{Conn: conn}
+	c.conn = conn
 }
 
-// The server owns socket lifetime; detach only clears component runtime state.
 func (c *Component) detachConnection() {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	c.transportConn = nil
+	c.conn = nil
 }
 
-func (c *Component) setEvent(eventName string, event *transport.Event) {
+func (c *Component) setEvent(eventName string, event *transportpb.Event) {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
 	c.events[eventName] = event
 }
 
-func (c *Component) getEvent(eventName string) (*transport.Event, bool) {
+func (c *Component) getEvent(eventName string) (*transportpb.Event, bool) {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 
@@ -78,12 +78,11 @@ func (c *Component) close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	// Close the transport connection if it exists
-	if c.transportConn != nil && c.transportConn.Conn != nil {
-		err := c.transportConn.Conn.Close()
-		c.transportConn = nil
-		return err
+	if c.conn == nil {
+		return nil
 	}
 
-	return nil
+	err := c.conn.Close()
+	c.conn = nil
+	return err
 }
