@@ -124,7 +124,16 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 				return nil
 			} else if cont.State == "exited" {
 				// Restart it
-				c.startDockerContainer(cont.ID)
+				if err := c.startDockerContainer(cont.ID); err != nil {
+					return err
+				}
+				comp.SetDockerConnID(cont.ID)
+				return nil
+			} else if cont.State == "created" {
+				// Start it
+				if err := c.startDockerContainer(cont.ID); err != nil {
+					return err
+				}
 				comp.SetDockerConnID(cont.ID)
 				return nil
 			}
