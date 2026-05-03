@@ -167,6 +167,10 @@ func (h *ConnectionHandler) Close() {
 	h.conn.Close()
 }
 
+func (h *ConnectionHandler) ClientAddress() string {
+	return h.client.Address
+}
+
 func (h *ConnectionHandler) SendTransportMessage(message *transportpb.TransportMessage) {
 	if message == nil {
 		return
