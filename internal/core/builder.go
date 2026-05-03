@@ -6,9 +6,11 @@ import (
 
 	configpb "helios/generated/config"
 	ct "helios/internal/component_tree"
+	"helios/internal/logger"
 )
 
 func BuildComponentTree(cfg *configpb.ComponentTree) (*ct.ComponentTree, error) {
+	logger.Debugw("Building component tree", "config", cfg)
 	return componentTreeFromProto(cfg)
 }
 

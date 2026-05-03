@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+
+	"helios/internal/logger"
 )
 
 /*
@@ -104,6 +106,7 @@ func (t *ComponentTree) Close() error {
 // Good luck to the next maintainer!
 
 func (t *ComponentTree) addComponent(parent *node, name string, component *Component) (string, error) {
+	logger.Debugw("Adding component", "parent", parent, "name", name, "component", component)
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", fmt.Errorf("component name is empty")
@@ -129,6 +132,7 @@ func (t *ComponentTree) addComponent(parent *node, name string, component *Compo
 		component: component,
 	}
 	address := node.address()
+	logger.Debugw("Component address", "address", address)
 	if t.addressExists(address) {
 		return "", fmt.Errorf("duplicate node address %q", address)
 	}
@@ -144,6 +148,7 @@ func (t *ComponentTree) addComponent(parent *node, name string, component *Compo
 }
 
 func (t *ComponentTree) addComponentGroup(parent *node, name string) (string, error) {
+	logger.Debugw("Adding component group", "parent", parent, "name", name)
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return "", fmt.Errorf("component group name is empty")
@@ -166,6 +171,7 @@ func (t *ComponentTree) addComponentGroup(parent *node, name string) (string, er
 		children: []*node{},
 	}
 	address := node.address()
+	logger.Debugw("Component group address", "address", address)
 	if t.addressExists(address) {
 		return "", fmt.Errorf("duplicate node address %q", address)
 	}
