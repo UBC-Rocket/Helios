@@ -3,6 +3,7 @@ package docker
 import (
 	"fmt"
 
+	"helios/internal/logger"
 	"github.com/docker/docker/api/types/network"
 )
 
@@ -18,21 +19,21 @@ func (c *DockerClient) InitializeNetwork(networkName string) error {
 
 	for _, net := range list {
 		if net.Name == networkName {
-			fmt.Println("'", networkName, "' network already exists:", net.ID)
+			logger.Info(fmt.Sprintf("Network '%s' already exists: %s", networkName, net.ID))
 			c.net = network.CreateResponse{ID: net.ID}
 			return nil
 		}
 	}
 
 	// Create network
-	fmt.Println("Creating Docker network '", networkName, "'...")
+	logger.Info(fmt.Sprintf("Creating Docker network '%s'...", networkName))
 	result, err := c.cli.NetworkCreate(c.ctx, networkName, network.CreateOptions{
 		Driver: "bridge",
 	})
 	if err != nil {
 		return err
 	}
-	fmt.Println("'", networkName, "' network created:", result.ID)
+	logger.Info(fmt.Sprintf("Network '%s' created: %s", networkName, result.ID))
 
 	c.net = result
 	return nil
@@ -44,6 +45,6 @@ func (c *DockerClient) AddContainerToNetwork(containerID string) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Container %s connected to docker network\n", containerID)
+	logger.Info(fmt.Sprintf("Container %s connected to docker network", containerID))
 	return nil
 }
