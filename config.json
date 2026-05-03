@@ -1,15 +1,4 @@
 {
   "ports": [],
-  "volumes": [
-    {
-      "type": "file",
-      "name": "/var/run/docker.sock",
-      "source": ""
-    },
-    {
-      "type": "file",
-      "name": "/tmp/component_tree.json",
-      "source": ""
-    }
-  ]
+  "volumes": []
 }
