@@ -1,9 +1,10 @@
-package client
+package core
 
 import (
 	"os"
 
 	"helios/generated/config"
+
 	"google.golang.org/protobuf/encoding/protojson"
 )
 
@@ -18,7 +19,7 @@ type Client interface {
 	Close()
 }
 
-func Initialize(env string, runtime_hash string) Client {
+func Initialize(runtime_hash string) Client {
 	var cli Client
 	switch env {
 	case "local":
