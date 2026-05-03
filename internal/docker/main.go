@@ -44,7 +44,7 @@ func (c *DockerClient) Initialize() error {
 }
 
 // Start configured components in Docker based on the component tree in the core.
-func (c *DockerClient) StartConfigured(t *componenttree.ComponentTree) error {
+func (c *DockerClient) StartContainers(t *componenttree.ComponentTree) error {
 	if err := t.EachComponent(c.startContainer); err != nil {
 		return err
 	}
@@ -163,13 +163,13 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 // It should be checked if a container already exists with the same name and hash before calling this function.
 func (c *DockerClient) createContainer(address string, name string, comp *componenttree.Component) (container.CreateResponse, error) {
 	var deviceMappings []container.DeviceMapping
-	info := comp.GetDockerSpec()
-	if info == nil {
+	spec := comp.GetDockerSpec()
+	if spec == nil {
 		return container.CreateResponse{}, fmt.Errorf("No DockerSpec found for component at address %s", address)
 	}
 
 	// Port bindings
-	for _, port := range info.Ports {
+	for _, port := range spec.Ports {
 		var mode string = "rwm"
 		// TODO: Implement different modes for port mappings if necessary
 		// if path.Mode != "" {
@@ -185,7 +185,7 @@ func (c *DockerClient) createContainer(address string, name string, comp *compon
 
 	// Volume bindings
 	var volumeBinds []string
-	for _, volume := range info.Volumes {
+	for _, volume := range spec.Volumes {
 		var mode string = "rw"
 		volumeBinds = append(volumeBinds, fmt.Sprintf("%s:%s:%s", volume.Source, volume.Target, mode))
 	}
