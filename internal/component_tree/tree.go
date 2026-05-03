@@ -2,9 +2,11 @@ package component_tree
 
 import (
 	"fmt"
+	"net"
 	"strings"
 	"sync"
 
+	transportpb "helios/generated/transport"
 	"helios/internal/logger"
 )
 
@@ -93,7 +95,73 @@ func (t *ComponentTree) AddComponentGroup(parentAddress string, name string) (st
 	return t.addComponentGroup(parent, name)
 }
 
+func (t *ComponentTree) AttachConnection(address string, conn net.Conn, mustBeRegistered bool) error {
+	component, ok := t.ComponentFromAddress(strings.TrimSpace(address))
+	if !ok {
+		if mustBeRegistered {
+			return fmt.Errorf("unknown component address %q", address)
+		}
+		return nil
+	}
+
+	component.attachConnection(conn)
+	return nil
+}
+
+func (t *ComponentTree) DetachConnection(address string) {
+	component, ok := t.ComponentFromAddress(strings.TrimSpace(address))
+	if !ok {
+		return
+	}
+
+	component.detachConnection()
+}
+
+func (t *ComponentTree) SetEvent(address string, eventName string, event *transportpb.Event) error {
+	component, ok := t.ComponentFromAddress(strings.TrimSpace(address))
+	if !ok {
+		return fmt.Errorf("unknown component address %q", address)
+	}
+	eventName = strings.TrimSpace(eventName)
+	if eventName == "" {
+		return fmt.Errorf("event name is empty")
+	}
+	if event == nil {
+		return fmt.Errorf("event %q is nil", eventName)
+	}
+
+	component.setEvent(eventName, event)
+	return nil
+}
+
+func (t *ComponentTree) GetEvent(address string, eventName string) (*transportpb.Event, bool, error) {
+	component, ok := t.ComponentFromAddress(strings.TrimSpace(address))
+	if !ok {
+		return nil, false, fmt.Errorf("unknown component address %q", address)
+	}
+	eventName = strings.TrimSpace(eventName)
+	if eventName == "" {
+		return nil, false, fmt.Errorf("event name is empty")
+	}
+
+	event, ok := component.getEvent(eventName)
+	return event, ok, nil
+}
+
 func (t *ComponentTree) Close() error {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	errorOccurred := false
+	for address, node := range t.components {
+		if err := node.component.close(); err != nil {
+			logger.Errorw("Failed to close component", "address", address, "error", err)
+			errorOccurred = true
+		}
+	}
+	if errorOccurred {
+		return fmt.Errorf("component tree close failed")
+	}
 	return nil
 }
 

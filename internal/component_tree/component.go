@@ -5,13 +5,16 @@ import (
 	"sync"
 
 	"helios/generated/config"
+	"helios/generated/transport"
+	transportpb "helios/generated/transport"
 )
 
 type Component struct {
-	mu            sync.RWMutex
-	dockerSpec    *config.DockerSpec
-	dockerConn    *DockerConn
-	transportConn *TransportConn
+	mu         sync.RWMutex
+	dockerSpec *config.DockerSpec
+	dockerConn *DockerConn
+	conn       net.Conn
+	events     map[string]*transportpb.Event
 }
 
 type DockerConn struct {
@@ -25,7 +28,37 @@ type TransportConn struct {
 func NewComponent(dockerSpec *config.DockerSpec) *Component {
 	return &Component{
 		dockerSpec: dockerSpec,
+		events:     make(map[string]*transport.Event),
 	}
+}
+
+func (c *Component) attachConnection(conn net.Conn) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.conn = conn
+}
+
+func (c *Component) detachConnection() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.conn = nil
+}
+
+func (c *Component) setEvent(eventName string, event *transportpb.Event) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.events[eventName] = event
+}
+
+func (c *Component) getEvent(eventName string) (*transportpb.Event, bool) {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+
+	event, ok := c.events[eventName]
+	return event, ok
 }
 
 func (c *Component) GetDockerSpec() *config.DockerSpec {
@@ -39,4 +72,17 @@ func (c *Component) SetDockerConnID(id string) {
 	defer c.mu.Unlock()
 	// TODO: Check if DockerConn already exists and handle accordingly
 	c.dockerConn = &DockerConn{ContainerID: id}
+}
+
+func (c *Component) close() error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	if c.conn == nil {
+		return nil
+	}
+
+	err := c.conn.Close()
+	c.conn = nil
+	return err
 }

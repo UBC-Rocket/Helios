@@ -2,14 +2,15 @@ package core
 
 import (
 	"context"
-	"os"
 	"fmt"
+	"os"
 	"strings"
 
 	configpb "helios/generated/config"
-	componenttree "helios/internal/component_tree"
-	"helios/internal/logger"
+	tree "helios/internal/component_tree"
 	"helios/internal/docker"
+	"helios/internal/logger"
+	"helios/internal/server"
 
 	"google.golang.org/protobuf/encoding/protojson"
 )
@@ -18,12 +19,12 @@ type Core struct {
 	ctx context.Context
 	// Unique identifier for the specific Helios instance.
 	// Allows re-attaching to the same docker containers if the central helios instance is restarted.
-	runtimeHash string
-	usingDocker bool
+	runtimeHash  string
+	usingDocker  bool
 	dockerClient *docker.DockerClient
-	// server       *server.Server
+	server       *server.Server
 	// Represents a tree hierarchy of components.
-	tree *componenttree.ComponentTree
+	tree *tree.ComponentTree
 }
 
 func Initialize(ctx context.Context, runtimeHash string, usingDocker bool) *Core {
@@ -33,7 +34,7 @@ func Initialize(ctx context.Context, runtimeHash string, usingDocker bool) *Core
 		ctx:         ctx,
 		runtimeHash: runtimeHash,
 		usingDocker: usingDocker,
-		tree:        componenttree.New(),
+		tree:        tree.New(),
 	}
 }
 
@@ -93,15 +94,15 @@ func (c *Core) InitializeDockerRuntime(socketPath string) error {
  * Initializes the transport server.
  */
 func (c *Core) InitializeServer(address string) error {
-	// if c.server != nil {
-	// 	return fmt.Errorf("Server already initialized")
-	// }
-	// logger.Infow("Initializing server", "address", address)
-	// srv, err := server.StartServer(c.ctx, address, c)
-	// if err != nil {
-	// 	return err
-	// }
-	// c.server = srv
+	if c.server != nil {
+		return fmt.Errorf("Server already initialized")
+	}
+	logger.Infow("Initializing server", "address", address)
+	srv, err := server.StartServer(c.ctx, address, c.tree)
+	if err != nil {
+		return err
+	}
+	c.server = srv
 	return nil
 }
 
@@ -114,12 +115,12 @@ func (c *Core) Close() error {
 		}
 	}
 
-	// if c.server != nil {
-	// 	err := c.server.Close()
-	// 	if err != nil {
-	// 		logger.Warnw("Failed to close server", "error", err)
-	// 	}
-	// }
+	if c.server != nil {
+		err := c.server.Close()
+		if err != nil {
+			logger.Warnw("Failed to close server", "error", err)
+		}
+	}
 
 	// Close component tree
 	if c.tree != nil {
