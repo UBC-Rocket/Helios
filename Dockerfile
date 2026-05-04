@@ -30,6 +30,6 @@ WORKDIR /app
 
 COPY --from=builder /app/bin/ /app/bin
 
-EXPOSE 5000
+EXPOSE 8080
 
 CMD ["./bin/helios"]
