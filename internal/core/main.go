@@ -86,6 +86,10 @@ func (c *Core) InitializeDockerRuntime(socketPath string) error {
 	if err := c.dockerClient.InitializeNetwork("HeliosNet"); err != nil {
 		return err
 	}
+	// TODO: Dynamically get current container name/ID and connect to network
+	if err := c.dockerClient.AddContainerToNetworkByName("Helios"); err != nil {
+		return err
+	}
 	if err := c.dockerClient.StartContainers(c.tree); err != nil {
 		return err
 	}

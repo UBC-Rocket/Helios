@@ -51,6 +51,18 @@ func (c *DockerClient) StartContainers(t *componenttree.ComponentTree) error {
 	return nil
 }
 
+func (c *DockerClient) AddContainerToNetworkByName(containerName string) error {
+	id := c.getContainerID(containerName)
+	if id == "" {
+		return fmt.Errorf("Container with name %s not found", containerName)
+	}
+	
+	if err := c.AddContainerToNetwork(id); err != nil {
+		return err
+	}
+	return nil
+}
+
 // Close the Docker client.
 func (c *DockerClient) Close() error {
 	return c.cli.Close()
