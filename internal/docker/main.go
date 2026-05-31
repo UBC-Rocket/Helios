@@ -3,13 +3,17 @@ package docker
 import (
 	"context"
 	"fmt"
+	"os/exec"
+	"runtime"
 	"strings"
 
 	componenttree "helios/internal/component_tree"
+	"helios/internal/logger"
 
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/client"
+	"github.com/docker/go-connections/nat"
 )
 
 type DockerClient struct {
@@ -140,6 +144,7 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 					return err
 				}
 				comp.SetDockerConnID(cont.ID)
+				openURLs(comp.GetWebsites())
 				return nil
 			} else if cont.State == "created" {
 				// Start it
@@ -147,6 +152,7 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 					return err
 				}
 				comp.SetDockerConnID(cont.ID)
+				openURLs(comp.GetWebsites())
 				return nil
 			}
 		}
@@ -168,50 +174,83 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 	if err := c.startDockerContainer(cont.ID); err != nil {
 		return err
 	}
+	openURLs(comp.GetWebsites())
 	return nil
+}
+
+func openURLs(urls []string) {
+	for _, url := range urls {
+		openURL(url)
+	}
+}
+
+func openURL(url string) {
+	var cmd *exec.Cmd
+	switch runtime.GOOS {
+	case "darwin":
+		cmd = exec.Command("open", url)
+	case "windows":
+		cmd = exec.Command("cmd", "/c", "start", "", url)
+	default:
+		cmd = exec.Command("xdg-open", url)
+	}
+	if err := cmd.Start(); err != nil {
+		logger.Warnw("Failed to open URL", "url", url, "error", err)
+	}
 }
 
 // Create a container using information from the image struct and runtime_hash.
 // It should be checked if a container already exists with the same name and hash before calling this function.
 func (c *DockerClient) createContainer(address string, name string, comp *componenttree.Component) (container.CreateResponse, error) {
-	var deviceMappings []container.DeviceMapping
 	spec := comp.GetDockerSpec()
 	if spec == nil {
 		return container.CreateResponse{}, fmt.Errorf("No DockerSpec found for component at address %s", address)
 	}
 
-	// Port bindings
-	for _, port := range spec.Ports {
-		var mode string = "rwm"
-		// TODO: Implement different modes for port mappings if necessary
-		// if path.Mode != "" {
-		// 	mode = path.Mode
-		// }
-
+	// Device mappings
+	var deviceMappings []container.DeviceMapping
+	for _, device := range spec.Devices {
 		deviceMappings = append(deviceMappings, container.DeviceMapping{
-			PathOnHost:        port.Source,
-			PathInContainer:   port.Target,
-			CgroupPermissions: mode,
+			PathOnHost:        device.Source,
+			PathInContainer:   device.Target,
+			CgroupPermissions: "rwm",
 		})
 	}
 
 	// Volume bindings
 	var volumeBinds []string
 	for _, volume := range spec.Volumes {
-		var mode string = "rw"
-		volumeBinds = append(volumeBinds, fmt.Sprintf("%s:%s:%s", volume.Source, volume.Target, mode))
+		volumeBinds = append(volumeBinds, fmt.Sprintf("%s:%s:rw", volume.Source, volume.Target))
+	}
+
+	// Port forwarding
+	exposedPorts := nat.PortSet{}
+	portBindings := nat.PortMap{}
+	for _, port := range spec.Ports {
+		portType := port.Type
+		if portType == "" {
+			portType = "tcp"
+		}
+		containerPort := nat.Port(fmt.Sprintf("%s/%s", port.Target, portType))
+		exposedPorts[containerPort] = struct{}{}
+		portBindings[containerPort] = []nat.PortBinding{
+			{HostIP: "0.0.0.0", HostPort: port.Source},
+		}
 	}
 
 	// Create container
 	resp, err := c.cli.ContainerCreate(c.ctx,
 		&container.Config{
-			Image: strings.ToLower(name),
+			Image:        strings.ToLower(name),
+			Cmd:          comp.GetFlags(),
+			ExposedPorts: exposedPorts,
 			Labels: map[string]string{
 				"runtime_hash": c.runtimeHash,
 			},
 		},
 		&container.HostConfig{
-			Binds: volumeBinds,
+			Binds:        volumeBinds,
+			PortBindings: portBindings,
 			Resources: container.Resources{
 				Devices: deviceMappings,
 			},
