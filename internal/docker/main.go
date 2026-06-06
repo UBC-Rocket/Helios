@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"io"
 	"os/exec"
 	"runtime"
 	"strings"
@@ -17,10 +18,11 @@ import (
 )
 
 type DockerClient struct {
-	runtimeHash string
-	cli *client.Client
-	ctx context.Context
-	net network.CreateResponse
+	runtimeHash   string
+	cli           *client.Client
+	ctx           context.Context
+	net           network.CreateResponse
+	deviceMonitor *DeviceMonitor
 }
 
 /*
@@ -52,6 +54,10 @@ func (c *DockerClient) StartContainers(t *componenttree.ComponentTree) error {
 	if err := t.EachComponent(c.startContainer); err != nil {
 		return err
 	}
+	c.deviceMonitor = newDeviceMonitor(c.ctx, c, t)
+	if err := c.deviceMonitor.start(); err != nil {
+		logger.Warnw("Device monitor failed to start", "error", err)
+	}
 	return nil
 }
 
@@ -69,6 +75,9 @@ func (c *DockerClient) AddContainerToNetworkByName(containerName string) error {
 
 // Close the Docker client.
 func (c *DockerClient) Close() error {
+	if c.deviceMonitor != nil {
+		c.deviceMonitor.stop()
+	}
 	return c.cli.Close()
 }
 
@@ -144,6 +153,7 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 					return err
 				}
 				comp.SetDockerConnID(cont.ID)
+				c.applyInitialDeviceNodes(cont.ID, comp.GetDockerSpec().GetDevices())
 				openURLs(comp.GetWebsites())
 				return nil
 			} else if cont.State == "created" {
@@ -152,6 +162,7 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 					return err
 				}
 				comp.SetDockerConnID(cont.ID)
+				c.applyInitialDeviceNodes(cont.ID, comp.GetDockerSpec().GetDevices())
 				openURLs(comp.GetWebsites())
 				return nil
 			}
@@ -174,6 +185,7 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 	if err := c.startDockerContainer(cont.ID); err != nil {
 		return err
 	}
+	c.applyInitialDeviceNodes(cont.ID, comp.GetDockerSpec().GetDevices())
 	openURLs(comp.GetWebsites())
 	return nil
 }
@@ -207,15 +219,8 @@ func (c *DockerClient) createContainer(address string, name string, comp *compon
 		return container.CreateResponse{}, fmt.Errorf("No DockerSpec found for component at address %s", address)
 	}
 
-	// Device mappings
-	var deviceMappings []container.DeviceMapping
-	for _, device := range spec.Devices {
-		deviceMappings = append(deviceMappings, container.DeviceMapping{
-			PathOnHost:        device.Source,
-			PathInContainer:   device.Target,
-			CgroupPermissions: "rwm",
-		})
-	}
+	// Device configuration (platform-specific: cgroup rules on Linux, bind mappings elsewhere)
+	deviceMappings, cgroupRules, _ := buildDeviceConfig(spec.Devices)
 
 	// Volume bindings
 	var volumeBinds []string
@@ -252,7 +257,8 @@ func (c *DockerClient) createContainer(address string, name string, comp *compon
 			Binds:        volumeBinds,
 			PortBindings: portBindings,
 			Resources: container.Resources{
-				Devices: deviceMappings,
+				Devices:           deviceMappings,
+				DeviceCgroupRules: cgroupRules,
 			},
 		},
 		nil, nil, name)
@@ -266,6 +272,34 @@ func (c *DockerClient) createContainer(address string, name string, comp *compon
 func (c *DockerClient) startDockerContainer(ID string) error {
 	if err := c.cli.ContainerStart(c.ctx, ID, container.StartOptions{}); err != nil {
 		return err
+	}
+	return nil
+}
+
+// execMknod runs `mknod` inside a container via a privileged exec to create a
+// device node at target with the given character device major:minor numbers.
+func (c *DockerClient) execMknod(containerID string, target string, major uint32, minor uint32) error {
+	cmd := fmt.Sprintf("rm -f %s && mknod -m 660 %s c %d %d", target, target, major, minor)
+	execID, err := c.cli.ContainerExecCreate(c.ctx, containerID, container.ExecOptions{
+		Cmd:        []string{"/bin/sh", "-c", cmd},
+		Privileged: true,
+	})
+	if err != nil {
+		return fmt.Errorf("exec create: %w", err)
+	}
+	resp, err := c.cli.ContainerExecAttach(c.ctx, execID.ID, container.ExecAttachOptions{})
+	if err != nil {
+		return fmt.Errorf("exec attach: %w", err)
+	}
+	defer resp.Close()
+	io.Copy(io.Discard, resp.Reader)
+
+	inspect, err := c.cli.ContainerExecInspect(c.ctx, execID.ID)
+	if err != nil {
+		return fmt.Errorf("exec inspect: %w", err)
+	}
+	if inspect.ExitCode != 0 {
+		return fmt.Errorf("mknod exited with code %d", inspect.ExitCode)
 	}
 	return nil
 }

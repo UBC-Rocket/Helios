@@ -90,6 +90,15 @@ func (c *Component) SetDockerConnID(id string) {
 	c.dockerConn = &DockerConn{ContainerID: id}
 }
 
+func (c *Component) GetDockerConnID() string {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	if c.dockerConn == nil {
+		return ""
+	}
+	return c.dockerConn.ContainerID
+}
+
 func (c *Component) close() error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
