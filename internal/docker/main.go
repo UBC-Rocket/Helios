@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"io"
 	"strings"
 
@@ -254,7 +255,7 @@ func (c *DockerClient) startDockerContainer(ID string) error {
 // execMknod runs `mknod` inside a container via a privileged exec to create a
 // device node at target with the given character device major:minor numbers.
 func (c *DockerClient) execMknod(containerID string, target string, major uint32, minor uint32) error {
-	cmd := fmt.Sprintf("rm -f %s && mknod -m 660 %s c %d %d", target, target, major, minor)
+	cmd := fmt.Sprintf("mkdir -p %s && rm -f %s && mknod -m 660 %s c %d %d", filepath.Dir(target), target, target, major, minor)
 	execID, err := c.cli.ContainerExecCreate(c.ctx, containerID, container.ExecOptions{
 		Cmd:        []string{"/bin/sh", "-c", cmd},
 		Privileged: true,
