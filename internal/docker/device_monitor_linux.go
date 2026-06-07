@@ -49,6 +49,10 @@ func (m *DeviceMonitor) start() error {
 		return fmt.Errorf("inotify_add_watch /dev: %w", err)
 	}
 
+	for each configured device that is a directory:
+	    unix.InotifyAddWatch(inoFd, device.Source, unix.IN_CREATE|unix.IN_MOVED_TO)
+
+
 	epFd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
 		unix.Close(inoFd)
