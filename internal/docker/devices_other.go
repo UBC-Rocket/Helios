@@ -8,7 +8,7 @@ import (
 )
 
 // buildDeviceConfig returns traditional DeviceMapping entries on non-Linux platforms.
-func buildDeviceConfig(devices []*configpb.Device) (mappings []container.DeviceMapping, cgroupRules []string, mknodNeeded bool) {
+func buildDeviceConfig(devices []*configpb.Device) (mappings []container.DeviceMapping, cgroupRules []string, extraBinds []string) {
 	for _, device := range devices {
 		mappings = append(mappings, container.DeviceMapping{
 			PathOnHost:        device.Source,
@@ -16,7 +16,7 @@ func buildDeviceConfig(devices []*configpb.Device) (mappings []container.DeviceM
 			CgroupPermissions: "rwm",
 		})
 	}
-	return mappings, nil, false
+	return mappings, nil, nil
 }
 
 // applyInitialDeviceNodes is a no-op on non-Linux; --device handles it at container creation.

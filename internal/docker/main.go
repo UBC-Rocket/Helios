@@ -194,13 +194,14 @@ func (c *DockerClient) createContainer(address string, name string, comp *compon
 	}
 
 	// Device configuration (platform-specific: cgroup rules on Linux, bind mappings elsewhere)
-	deviceMappings, cgroupRules, _ := buildDeviceConfig(spec.Devices)
+	deviceMappings, cgroupRules, deviceBinds := buildDeviceConfig(spec.Devices)
 
-	// Volume bindings
+	// Volume bindings (device directory binds are merged in)
 	var volumeBinds []string
 	for _, volume := range spec.Volumes {
 		volumeBinds = append(volumeBinds, fmt.Sprintf("%s:%s:rw", volume.Source, volume.Target))
 	}
+	volumeBinds = append(volumeBinds, deviceBinds...)
 
 	// Port forwarding
 	exposedPorts := nat.PortSet{}

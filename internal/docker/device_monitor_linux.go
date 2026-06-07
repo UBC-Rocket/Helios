@@ -6,9 +6,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
-	"os"
 	"path/filepath"
-	"strings"
 	"unsafe"
 
 	componenttree "helios/internal/component_tree"
@@ -17,16 +15,16 @@ import (
 	"golang.org/x/sys/unix"
 )
 
-// DeviceMonitor watches /dev (and configured device subdirectories) via inotify
-// and creates device nodes inside containers when devices appear or change.
+// DeviceMonitor watches /dev via inotify and creates device nodes inside
+// containers when file/symlink devices appear or change.
+// Directory devices (e.g. /dev/snd) are handled by bind mounts instead.
 type DeviceMonitor struct {
-	ctx       context.Context
-	cancel    context.CancelFunc
-	inoFd     int
-	epFd      int
-	client    *DockerClient
-	tree      *componenttree.ComponentTree
-	watchDirs map[int32]string // inotify watch descriptor → directory path
+	ctx    context.Context
+	cancel context.CancelFunc
+	inoFd  int
+	epFd   int
+	client *DockerClient
+	tree   *componenttree.ComponentTree
 }
 
 func newDeviceMonitor(ctx context.Context, client *DockerClient, tree *componenttree.ComponentTree) *DeviceMonitor {
@@ -47,34 +45,10 @@ func (m *DeviceMonitor) start() error {
 		return fmt.Errorf("inotify_init1: %w", err)
 	}
 
-	devWd, err := unix.InotifyAddWatch(inoFd, "/dev", unix.IN_CREATE|unix.IN_MOVED_TO)
-	if err != nil {
+	if _, err := unix.InotifyAddWatch(inoFd, "/dev", unix.IN_CREATE|unix.IN_MOVED_TO); err != nil {
 		unix.Close(inoFd)
 		return fmt.Errorf("inotify_add_watch /dev: %w", err)
 	}
-
-	watchDirs := map[int32]string{int32(devWd): "/dev"}
-
-	// Also watch any configured device source that is a directory (e.g. /dev/snd).
-	_ = m.tree.EachComponent(func(_ string, _ string, comp *componenttree.Component) error {
-		spec := comp.GetDockerSpec()
-		if spec == nil {
-			return nil
-		}
-		for _, device := range spec.Devices {
-			info, err := os.Stat(device.Source)
-			if err != nil || !info.IsDir() {
-				continue
-			}
-			wd, err := unix.InotifyAddWatch(inoFd, device.Source, unix.IN_CREATE|unix.IN_MOVED_TO)
-			if err != nil {
-				logger.Warnw("inotify_add_watch failed for device directory", "path", device.Source, "error", err)
-				continue
-			}
-			watchDirs[int32(wd)] = device.Source
-		}
-		return nil
-	})
 
 	epFd, err := unix.EpollCreate1(unix.EPOLL_CLOEXEC)
 	if err != nil {
@@ -91,7 +65,6 @@ func (m *DeviceMonitor) start() error {
 
 	m.inoFd = inoFd
 	m.epFd = epFd
-	m.watchDirs = watchDirs
 
 	go m.run()
 	logger.Info("Device monitor started, watching /dev")
@@ -121,7 +94,6 @@ func (m *DeviceMonitor) run() {
 		default:
 		}
 
-		// Wait up to 500 ms so we can re-check context without burning CPU.
 		n, err := unix.EpollWait(m.epFd, epEvents, 500)
 		if err != nil {
 			if err == unix.EINTR {
@@ -162,11 +134,7 @@ func (m *DeviceMonitor) parseEvents(buf []byte) {
 		offset += unix.SizeofInotifyEvent + nameLen
 
 		if name != "" {
-			baseDir := m.watchDirs[event.Wd]
-			if baseDir == "" {
-				baseDir = "/dev"
-			}
-			m.handleDeviceAppeared(filepath.Join(baseDir, name))
+			m.handleDeviceAppeared(filepath.Join("/dev", name))
 		}
 	}
 }
@@ -174,7 +142,6 @@ func (m *DeviceMonitor) parseEvents(buf []byte) {
 func (m *DeviceMonitor) handleDeviceAppeared(hostPath string) {
 	major, minor, err := resolveDeviceMajorMinor(hostPath)
 	if err != nil {
-		// Not a device file (directory, non-device symlink, etc.).
 		return
 	}
 
@@ -188,31 +155,20 @@ func (m *DeviceMonitor) handleDeviceAppeared(hostPath string) {
 			return nil
 		}
 		for _, device := range spec.Devices {
-			var targetPath string
 			if deviceMatchesHost(device.Source, hostPath) {
-				// File device: source directly matches the new path.
-				targetPath = device.Target
-			} else if isSubpath(device.Source, hostPath) {
-				// Directory device (e.g. /dev/snd): map the relative path into the target dir.
-				rel, _ := filepath.Rel(device.Source, hostPath)
-				targetPath = filepath.Join(device.Target, rel)
-			}
-			if targetPath == "" {
-				continue
-			}
-			logger.Infow("Hot-plug: device appeared, creating node in container",
-				"device", hostPath, "container", name, "target", targetPath)
-			if err := m.client.execMknod(containerID, targetPath, major, minor); err != nil {
-				logger.Warnw("Failed to create hot-plug device node",
-					"error", err, "container", name, "device", targetPath)
+				logger.Infow("Hot-plug: device appeared, creating node in container",
+					"device", hostPath, "container", name, "target", device.Target)
+				if err := m.client.execMknod(containerID, device.Target, major, minor); err != nil {
+					logger.Warnw("Failed to create hot-plug device node",
+						"error", err, "container", name, "device", device.Target)
+				}
 			}
 		}
 		return nil
 	})
 }
 
-// deviceMatchesHost reports whether the configured source path refers to hostPath,
-// accounting for the fact that source may be a symlink that resolves to hostPath.
+// deviceMatchesHost reports whether source refers to hostPath, accounting for symlinks.
 func deviceMatchesHost(source, hostPath string) bool {
 	if source == hostPath {
 		return true
@@ -224,13 +180,4 @@ func deviceMatchesHost(source, hostPath string) bool {
 		return true
 	}
 	return false
-}
-
-// isSubpath reports whether child is directly inside parent (not parent itself).
-func isSubpath(parent, child string) bool {
-	rel, err := filepath.Rel(parent, child)
-	if err != nil {
-		return false
-	}
-	return rel != "." && !strings.HasPrefix(rel, "..")
 }
