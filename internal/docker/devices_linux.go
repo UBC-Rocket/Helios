@@ -40,18 +40,35 @@ func buildDeviceConfig(devices []*configpb.Device) (mappings []container.DeviceM
 // applyInitialDeviceNodes creates device nodes inside a newly started container
 // for any configured devices that already exist on the host.
 func (c *DockerClient) applyInitialDeviceNodes(containerID string, devices []*configpb.Device) {
-	for _, device := range devices {
-		major, minor, err := resolveDeviceMajorMinor(device.Source)
-		if err != nil {
-			// Device not present yet; the monitor will create the node when it appears.
-			continue
-		}
-		logger.Infow("Creating initial device node in container", "source", device.Source, "target", device.Target, "container", containerID)
-		if err := c.execMknod(containerID, device.Target, major, minor); err != nil {
-			logger.Warnw("Failed to create initial device node", "target", device.Target, "error", err)
-		}
-	}
+    for _, device := range devices {
+        info, err := os.Stat(device.Source)
+        if err == nil && info.IsDir() {
+            // Expand directory: create a node for every device file inside
+            entries, _ := os.ReadDir(device.Source)
+            for _, entry := range entries {
+                hostPath := filepath.Join(device.Source, entry.Name())
+                targetPath := filepath.Join(device.Target, entry.Name())
+                major, minor, err := resolveDeviceMajorMinor(hostPath)
+                if err != nil {
+                    continue
+                }
+                if err := c.execMknod(containerID, targetPath, major, minor); err != nil {
+                    logger.Warnw("Failed to create initial device node", "target", targetPath, "error", err)
+                }
+            }
+            continue
+        }
+        major, minor, err := resolveDeviceMajorMinor(device.Source)
+        if err != nil {
+            continue
+        }
+        logger.Infow("Creating initial device node in container", "source", device.Source, "target", device.Target, "container", containerID)
+        if err := c.execMknod(containerID, device.Target, major, minor); err != nil {
+            logger.Warnw("Failed to create initial device node", "target", device.Target, "error", err)
+        }
+    }
 }
+
 
 // resolveDeviceMajorMinor stats path (following symlinks) and returns its major/minor numbers.
 func resolveDeviceMajorMinor(path string) (major, minor uint32, err error) {
