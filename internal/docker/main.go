@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os/exec"
-	"runtime"
 	"strings"
 
 	componenttree "helios/internal/component_tree"
@@ -154,7 +152,6 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 				}
 				comp.SetDockerConnID(cont.ID)
 				c.applyInitialDeviceNodes(cont.ID, comp.GetDockerSpec().GetDevices())
-				openURLs(comp.GetWebsites())
 				return nil
 			} else if cont.State == "created" {
 				// Start it
@@ -163,7 +160,6 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 				}
 				comp.SetDockerConnID(cont.ID)
 				c.applyInitialDeviceNodes(cont.ID, comp.GetDockerSpec().GetDevices())
-				openURLs(comp.GetWebsites())
 				return nil
 			}
 		}
@@ -186,29 +182,7 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 		return err
 	}
 	c.applyInitialDeviceNodes(cont.ID, comp.GetDockerSpec().GetDevices())
-	openURLs(comp.GetWebsites())
 	return nil
-}
-
-func openURLs(urls []string) {
-	for _, url := range urls {
-		openURL(url)
-	}
-}
-
-func openURL(url string) {
-	var cmd *exec.Cmd
-	switch runtime.GOOS {
-	case "darwin":
-		cmd = exec.Command("open", url)
-	case "windows":
-		cmd = exec.Command("cmd", "/c", "start", "", url)
-	default:
-		cmd = exec.Command("xdg-open", url)
-	}
-	if err := cmd.Start(); err != nil {
-		logger.Warnw("Failed to open URL", "url", url, "error", err)
-	}
 }
 
 // Create a container using information from the image struct and runtime_hash.
