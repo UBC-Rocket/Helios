@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 	"io"
 	"strings"
 
