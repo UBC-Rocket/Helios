@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"io"
-	"strings"
 
 	componenttree "helios/internal/component_tree"
 	"helios/internal/logger"
@@ -117,12 +116,23 @@ func (c *DockerClient) getContainers() (summary []container.Summary) {
 // If the container already exists, it will be restarted or removed and recreated if the hash does not match.
 // Created container will be added to the docker network and started.
 func (c *DockerClient) startContainer(address string, name string, comp *componenttree.Component) error {
+	spec := comp.GetDockerSpec()
+	if spec == nil {
+		return fmt.Errorf("No DockerSpec found for component at address %s", address)
+	}
+
+	// The container name comes from the spec; fall back to the tree node name.
+	containerName := spec.GetContainerName()
+	if containerName == "" {
+		containerName = name
+	}
+
 	list := c.getContainers()
 	var cont container.Summary = container.Summary{}
 
 	// Find container by name to see if it exists
 	for _, x := range list {
-		if x.Names[0] == "/"+name {
+		if x.Names[0] == "/"+containerName {
 			cont = x
 			break
 		}
@@ -167,7 +177,7 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 	}
 
 	// Container does not exist, create it
-	contResp, contErr := c.createContainer(address, name, comp)
+	contResp, contErr := c.createContainer(address, containerName, comp)
 	if contErr != nil {
 		return contErr
 	}
@@ -188,10 +198,19 @@ func (c *DockerClient) startContainer(address string, name string, comp *compone
 
 // Create a container using information from the image struct and runtime_hash.
 // It should be checked if a container already exists with the same name and hash before calling this function.
-func (c *DockerClient) createContainer(address string, name string, comp *componenttree.Component) (container.CreateResponse, error) {
+func (c *DockerClient) createContainer(address string, containerName string, comp *componenttree.Component) (container.CreateResponse, error) {
 	spec := comp.GetDockerSpec()
 	if spec == nil {
 		return container.CreateResponse{}, fmt.Errorf("No DockerSpec found for component at address %s", address)
+	}
+
+	// Build the image reference from the spec (image[:tag]).
+	image := spec.GetImage()
+	if image == "" {
+		return container.CreateResponse{}, fmt.Errorf("DockerSpec for component at address %s has no image", address)
+	}
+	if tag := spec.GetTag(); tag != "" {
+		image = image + ":" + tag
 	}
 
 	// Device configuration (platform-specific: cgroup rules on Linux, bind mappings elsewhere)
@@ -222,7 +241,7 @@ func (c *DockerClient) createContainer(address string, name string, comp *compon
 	// Create container
 	resp, err := c.cli.ContainerCreate(c.ctx,
 		&container.Config{
-			Image:        strings.ToLower(name),
+			Image:        image,
 			Cmd:          comp.GetFlags(),
 			ExposedPorts: exposedPorts,
 			Labels: map[string]string{
@@ -237,7 +256,7 @@ func (c *DockerClient) createContainer(address string, name string, comp *compon
 				DeviceCgroupRules: cgroupRules,
 			},
 		},
-		nil, nil, name)
+		nil, nil, containerName)
 	if err != nil {
 		return resp, err
 	}
