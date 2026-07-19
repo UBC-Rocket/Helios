@@ -223,6 +223,12 @@ func (c *DockerClient) createContainer(address string, containerName string, com
 	}
 	volumeBinds = append(volumeBinds, deviceBinds...)
 
+	// Environment variables (KEY=VALUE form expected by Docker)
+	var envVars []string
+	for key, value := range spec.GetEnv() {
+		envVars = append(envVars, fmt.Sprintf("%s=%s", key, value))
+	}
+
 	// Port forwarding
 	exposedPorts := nat.PortSet{}
 	portBindings := nat.PortMap{}
@@ -243,6 +249,7 @@ func (c *DockerClient) createContainer(address string, containerName string, com
 		&container.Config{
 			Image:        image,
 			Cmd:          comp.GetFlags(),
+			Env:          envVars,
 			ExposedPorts: exposedPorts,
 			Labels: map[string]string{
 				"runtime_hash": c.runtimeHash,
